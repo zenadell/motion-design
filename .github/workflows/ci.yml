@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: Technique docs are up to date
+        run: |
+          npm run gen:docs
+          git diff --exit-code docs/techniques.md || (echo "::error::docs/techniques.md is stale, run npm run build && npm run gen:docs" && exit 1)
+
+  smoke:
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build
+      - name: Render every technique
+        run: npm run smoke
+      - name: Contact sheet of the example plans
+        run: |
+          node dist/cli.js stills examples/jomiez.plan.json -o out/jomiez-stills --sheet
+          node dist/cli.js stills examples/resume-reel.plan.json -o out/resume-stills --sheet
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gallery
+          path: |
+            out/gallery
+            out/*-stills/sheet.png

@@ -1,0 +1,367 @@
+{
+  "version": 1,
+  "meta": {
+    "title": "Showreel",
+    "fps": 60,
+    "hud": true,
+    "captions": true,
+    "grain": 0.07
+  },
+  "brand": {
+    "name": "Jomiez",
+    "suffix": "Innovation",
+    "tagline": "Software, web & AI systems for businesses worldwide.",
+    "site": "jomiez.com",
+    "email": "hello@jomiez.com",
+    "colors": {
+      "bg": "#0B0C0F",
+      "text": "#F1EFED",
+      "primary": "#F63C0C",
+      "secondary": "#FE812E",
+      "surface": "#16171B",
+      "muted": "#B3B8B5",
+      "accent": "#D8FF3A"
+    },
+    "fonts": {
+      "display": "Plus Jakarta Sans",
+      "mono": "JetBrains Mono"
+    },
+    "logo": {
+      "d": "M212 158.8 L322 158.8 A26 26 0 0 1 348 184.8 L348 199.87 A48 48 0 0 1 334.24 233.51 L269.6 299.3 L323 299.3 A22.05 22.05 0 0 1 323 343.4 L204.8 343.4 A47.2 47.2 0 0 1 204.8 249 L204.8 295.4 A4 4 0 0 0 211.64 298.22 L299.52 209.82 A4 4 0 0 0 296.68 203 L177.46 203 A4 4 0 0 1 174.63 196.17 Z"
+    },
+    "tile": true
+  },
+  "music": {
+    "bpm": 120,
+    "genre": "afro-house",
+    "progression": [
+      "Fm9",
+      "Dbmaj9",
+      "Eb6/9",
+      "Cm7"
+    ]
+  },
+  "sections": [
+    {
+      "technique": "blade-open",
+      "beats": 0.5
+    },
+    {
+      "technique": "word-cuts",
+      "beats": 1.5,
+      "params": {
+        "words": [
+          "WE",
+          "BUILD",
+          "POWERFUL"
+        ],
+        "styles": [
+          "split",
+          "diagonal",
+          "weight"
+        ]
+      }
+    },
+    {
+      "technique": "glitch-word",
+      "beats": 2,
+      "params": {
+        "word": "SOFTWARE",
+        "tag": "<Software />"
+      },
+      "transition": "blade"
+    },
+    {
+      "technique": "wave-word",
+      "beats": 2,
+      "params": {
+        "word": "WEBSITES",
+        "kicker": "WEB · MOBILE · SAAS · E-COMMERCE",
+        "url": "https://www.jomiez.com"
+      }
+    },
+    {
+      "technique": "dot-matrix-word",
+      "beats": 2,
+      "params": {
+        "word": "AI",
+        "prefix": "&",
+        "suffix": "-DRIVEN"
+      }
+    },
+    {
+      "technique": "swiss-stack",
+      "beats": 2,
+      "params": {
+        "lines": [
+          "SOLUTIONS",
+          "THAT",
+          "TRANSFORM"
+        ]
+      }
+    },
+    {
+      "technique": "flip-word",
+      "beats": 2,
+      "params": {
+        "word": "TRANSFORM",
+        "subline": "BUSINESSES."
+      }
+    },
+    {
+      "technique": "code-editor",
+      "beats": 4,
+      "params": {
+        "filename": "build.ts",
+        "lines": [
+          "import { design, build, ship } from '@jomiez/core'",
+          "",
+          "const product = await build({",
+          "  web: 'next.js', mobile: 'react-native',",
+          "  ai: ['gemini', 'openai', 'claude'],",
+          "})",
+          "",
+          "ship(product, { to: 'the world' })  // live in seconds"
+        ],
+        "command": "jomiez ship --prod",
+        "result": "Deployed · live worldwide in 1.2s"
+      }
+    },
+    {
+      "technique": "exploded-ui",
+      "beats": 4,
+      "params": {
+        "eyebrow": "Innovative Software Solutions",
+        "headline": [
+          "We Build Powerful Software,",
+          "Websites & AI-Driven",
+          "Solutions."
+        ],
+        "cta": "Let’s Connect",
+        "rating": {
+          "value": "4.9",
+          "label": "Trusted by businesses globally"
+        },
+        "chat": {
+          "name": "Chaka AI",
+          "message": "What are we building today?"
+        }
+      }
+    },
+    {
+      "technique": "particle-morph",
+      "beats": 8,
+      "params": {
+        "items": [
+          {
+            "label": "WEB",
+            "desc": "React · Next.js · Node.js",
+            "icon": "web"
+          },
+          {
+            "label": "MOBILE",
+            "desc": "Cross-platform apps",
+            "icon": "mobile"
+          },
+          {
+            "label": "AI",
+            "desc": "Gemini · OpenAI · Claude",
+            "icon": "ai"
+          },
+          {
+            "label": "UI/UX",
+            "desc": "Interface & product design",
+            "icon": "ux"
+          },
+          {
+            "label": "BRANDING",
+            "desc": "Visual identity",
+            "icon": "brand"
+          },
+          {
+            "label": "MOTION",
+            "desc": "Animation & motion design",
+            "icon": "motion"
+          },
+          {
+            "label": "3D",
+            "desc": "Three-dimensional design",
+            "icon": "cube"
+          }
+        ]
+      }
+    },
+    {
+      "technique": "dot-globe",
+      "beats": 8,
+      "params": {
+        "hq": {
+          "name": "Nigeria",
+          "lat": 9.08,
+          "lon": 8.2
+        },
+        "cities": [
+          {
+            "name": "London",
+            "lat": 51.5,
+            "lon": -0.13
+          },
+          {
+            "name": "New York",
+            "lat": 40.7,
+            "lon": -74.0
+          },
+          {
+            "name": "Toronto",
+            "lat": 43.65,
+            "lon": -79.4
+          },
+          {
+            "name": "Dubai",
+            "lat": 25.2,
+            "lon": 55.3
+          },
+          {
+            "name": "Johannesburg",
+            "lat": -26.2,
+            "lon": 28.0
+          },
+          {
+            "name": "Los Angeles",
+            "lat": 34.05,
+            "lon": -118.2
+          },
+          {
+            "name": "Berlin",
+            "lat": 52.5,
+            "lon": 13.4
+          },
+          {
+            "name": "Singapore",
+            "lat": 1.35,
+            "lon": 103.8
+          }
+        ],
+        "headline": [
+          "Based in",
+          "Nigeria."
+        ],
+        "headline2": [
+          "Building for",
+          "the world."
+        ]
+      }
+    },
+    {
+      "technique": "montage",
+      "beats": 2,
+      "params": {
+        "every": 0.25,
+        "items": [
+          {
+            "title": "CHAKA AI",
+            "tag": "Multimodal AI platform"
+          },
+          {
+            "title": "ZYRO",
+            "tag": "SaaS landing system"
+          },
+          {
+            "title": "RENOK",
+            "tag": "Identity system"
+          },
+          {
+            "title": "SIATRA",
+            "tag": "E-commerce"
+          },
+          {
+            "title": "MORAE",
+            "tag": "Premium audio store"
+          },
+          {
+            "title": "AURAMAX",
+            "tag": "Product launch"
+          },
+          {
+            "title": "FLUXA",
+            "tag": "Framer template"
+          },
+          {
+            "title": "JOB FOUNDRY",
+            "tag": "Career platform"
+          }
+        ]
+      }
+    },
+    {
+      "technique": "stat-odometer",
+      "beats": 2,
+      "energy": 3,
+      "params": {
+        "value": "4.9",
+        "stars": 5,
+        "label": "Trusted by businesses globally",
+        "tension": true
+      }
+    },
+    {
+      "technique": "logo-build",
+      "beats": 4,
+      "params": {
+        "pieces": [
+          {
+            "rects": [
+              [
+                -0.05,
+                -0.05,
+                1.1,
+                0.295
+              ]
+            ],
+            "from": "left"
+          },
+          {
+            "rects": [
+              [
+                0.25,
+                0.2449,
+                0.8,
+                0.5162
+              ]
+            ],
+            "from": "diagonal"
+          },
+          {
+            "rects": [
+              [
+                -0.05,
+                0.7611,
+                1.1,
+                0.3
+              ],
+              [
+                -0.05,
+                0.44,
+                0.3,
+                0.3211
+              ]
+            ],
+            "from": "rotate"
+          }
+        ]
+      }
+    },
+    {
+      "technique": "end-card",
+      "beats": 8,
+      "params": {
+        "cta": "Let’s Connect",
+        "footer": [
+          "Available for new projects",
+          "jomiez.com",
+          "hello@jomiez.com"
+        ]
+      }
+    }
+  ]
+}
