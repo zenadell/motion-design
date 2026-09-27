@@ -14,6 +14,12 @@ export interface ReelAPI {
   still(t: number, sub?: number): string;
   /** Render the frame at `t` and report how long it took and how much is on screen (for automated QA). */
   probe(t: number): { ms: number; mean: number; std: number };
+  /**
+   * Objective motion metrics over [from, to]: for each step, how much of the frame
+   * differs from the background (coverage 0..1) and how much changed since the
+   * previous step (motion, mean absolute luminance change 0..1).
+   */
+  metrics(from: number, to: number, step?: number): { t: number; coverage: number; motion: number }[];
   /** A scaled-down JPEG of the frame at `t` (for vision-model review). */
   thumb(t: number, width?: number, sub?: number): string;
   render(t: number, sub?: number): void;
@@ -187,6 +193,34 @@ export function startPlayer(engine: Engine): void {
       }
       const n = d.length / 4, mean = sum / n;
       return { ms, mean, std: Math.sqrt(Math.max(0, sq / n - mean * mean)) };
+    },
+    metrics(from, to, step = 1 / 12) {
+      const c = document.createElement('canvas');
+      c.width = 96; c.height = 54;
+      const cg = c.getContext('2d', { willReadFrequently: true })!;
+      const out: { t: number; coverage: number; motion: number }[] = [];
+      let prev: Float32Array | null = null;
+      for (let t = from; t <= to + 1e-6; t += step) {
+        engine.renderFrame(g, t, 1);
+        cg.drawImage(canvas, 0, 0, 96, 54);
+        const d = cg.getImageData(0, 0, 96, 54).data;
+        const L = new Float32Array(96 * 54);
+        for (let i = 0; i < L.length; i++) L[i] = (0.2126 * d[i * 4] + 0.7152 * d[i * 4 + 1] + 0.0722 * d[i * 4 + 2]) / 255;
+        // background = median of the border ring
+        const ring: number[] = [];
+        for (let x = 0; x < 96; x++) ring.push(L[x], L[53 * 96 + x]);
+        for (let y = 0; y < 54; y++) ring.push(L[y * 96], L[y * 96 + 95]);
+        ring.sort((a, b) => a - b);
+        const bg = ring[ring.length >> 1];
+        let cov = 0, mot = 0;
+        for (let i = 0; i < L.length; i++) {
+          if (Math.abs(L[i] - bg) > 0.06) cov++;
+          if (prev) mot += Math.abs(L[i] - prev[i]);
+        }
+        out.push({ t, coverage: cov / L.length, motion: prev ? mot / L.length : 0 });
+        prev = L;
+      }
+      return out;
     },
     thumb(t, width = 960, sub = 1) {
       engine.renderFrame(g, t, sub);

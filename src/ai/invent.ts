@@ -2,49 +2,64 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Browser } from 'playwright';
 import { dataUrlToBuffer, launch, openReel } from '../cli/browser';
+import { renderClips } from '../cli/clip';
 import { buildHtml } from '../cli/html';
 import { autoTimes, renderVideo } from '../cli/render';
 import { DISPLAY_NAMES, SERIF_NAMES } from '../plan/fonts';
 import type { Plan, PlanInput } from '../plan/schema';
 import { validatePlan } from '../plan/validate';
 import { factCorpus, type BrandKit } from './brand-kit';
-import { image, parseJson, summarizeUsage, text, user, type Effort, type LLM, type Part, type Usage } from './llm';
+import { motionReport, type MotionReport } from './metrics';
+import { parseJson, summarizeUsage, text, user, video, type Effort, type LLM, type Part, type Usage } from './llm';
 import {
-  coderSystem, directionSchema, directorSystem, directorUser, fixUser, libSchema, libUser, reviewSchema, reviewSystem, sceneSchema, sceneUser,
-  type Direction, type Review,
+  coderSystem, conceptsSchema, conceptsUser, critiqueScore, developUser, directionSchema, directorSystem, directorUser, filmCriticSchema, filmCriticSystem, fixUser, libSchema, libUser,
+  pickSchema, pickSystem, type Concept,
+  rewriteUser, sceneCriticSchema, sceneCriticSystem, sceneCriticUser, sceneSchema, sceneUser,
+  type Direction, type FilmCritique, type SceneCritique,
 } from './invent-prompts';
 
 // Invent mode: the model designs a new visual language and writes all of the
-// drawing and sound code. The pipeline only runs what it writes and reports
-// back what broke (errors, blank or slow frames, unverified numbers), then
-// shows it the rendered frames for its own design review.
+// drawing and sound code. The pipeline runs what it writes, reports back what
+// broke, renders every scene to a clip the model WATCHES and scores against a
+// studio rubric, keeps the best of several candidates, and loops
+// critique → rewrite while the score improves. Then the whole film (with
+// sound) is reviewed and the weakest scenes get another pass.
 
 export interface InventOptions {
   kit: BrandKit;
   brief: string;
   seconds?: number;
   bpm?: number;
-  /** Design review → rewrite rounds. */
-  qaRounds?: number;
-  /** Automated test → fix rounds per step. */
+  /** Competing versions written per scene; the critic keeps the best. */
+  candidates?: number;
+  /** Watch → critique → rewrite rounds per scene. */
+  rounds?: number;
+  /** Whole-film reviews, each followed by a pass on the weakest scenes. */
+  filmRounds?: number;
+  /** Automated test → fix rounds per piece of code. */
   fixRounds?: number;
+  /** Stop optional refinement once model spend passes this many US dollars. */
+  budget?: number;
+  /** A score (0–10) at which a scene stops being refined. */
+  target?: number;
   render?: boolean;
   workers?: number;
   concurrency?: number;
   outDir: string;
   log?: (s: string) => void;
+  /** Separate models for writing code and for critiquing (default: the main model). */
+  codeLLM?: LLM;
+  criticLLM?: LLM;
+  /** Skip the director: use this direction (replicate mode). */
+  direction?: Direction;
+  /** Extra context for every scene prompt and critique (replicate mode: the reference breakdown). */
+  reference?: { note: string; clips?: Buffer[] };
 }
 
-interface SceneCode {
+export interface SceneCode {
   draw: string;
   sfx: string;
   hits: { beat: number; shake: number }[];
-}
-
-interface Audit {
-  step: string;
-  at: string;
-  reply: string;
 }
 
 const q2 = (x: number) => Math.max(0.5, Math.round(x * 2) / 2);
@@ -68,7 +83,7 @@ export function unverifiedNumbers(code: string, corpus: string, allowed: string[
   for (const m of code.matchAll(/(['"`])((?:\\.|(?!\1)[^\\])*)\1/g)) {
     const lit = m[2];
     if (!/[a-z]/i.test(lit) && !/[%+]/.test(lit)) continue;
-    if (/px|rgba?\(|hsla?\(|#[0-9a-f]{3,8}\b|deg|blur\(|\bms\b|^\s*\d+\s*$/i.test(lit)) continue;
+    if (/px|rgba?\(|hsla?\(|#[0-9a-f]{3,8}\b|deg|blur\(|contrast\(|\bms\b|^\s*\d+\s*$/i.test(lit)) continue;
     for (const n of lit.replace(/\$\{[^}]*\}/g, '').match(/\d+(?:[.,]\d+)?/g) ?? []) {
       if (allowed.includes(n)) continue;
       if (!new RegExp(`(^|[^\\d])${n.replace(/[.,]/g, '[.,]')}($|[^\\d])`).test(corpus)) out.add(`"${lit.slice(0, 60)}" states ${n}`);
@@ -89,32 +104,49 @@ async function pool<T, R>(items: T[], n: number, f: (x: T, i: number) => Promise
   return out;
 }
 
+const cleanScene = (r: Partial<SceneCode> | undefined, prev?: SceneCode): SceneCode => ({
+  draw: typeof r?.draw === 'string' && r.draw.trim() ? r.draw : prev?.draw ?? '',
+  sfx: typeof r?.sfx === 'string' ? r.sfx : prev?.sfx ?? '',
+  hits: Array.isArray(r?.hits) ? r!.hits! : prev?.hits ?? [],
+});
+
 export async function invent(llm: LLM, o: InventOptions) {
   const log = o.log ?? (() => {});
+  const codeLLM = o.codeLLM ?? llm, criticLLM = o.criticLLM ?? llm;
   const dir = o.outDir;
   mkdirSync(dir, { recursive: true });
   const f = (n: string) => join(dir, n);
   const usage: Usage[] = [];
-  const audit: Audit[] = [];
+  const audit: { step: string; model: string; at: string; reply: string }[] = [];
   const t0 = Date.now();
-  const fixRounds = o.fixRounds ?? 3;
-  const conc = o.concurrency ?? 3;
+  const fixRounds = o.fixRounds ?? 3, conc = o.concurrency ?? 3, budget = o.budget ?? 6, target = o.target ?? 9;
+  const spent = () => summarizeUsage(usage).usd ?? 0;
+  const overBudget = () => spent() > budget;
 
-  const ask = async <T>(label: string, system: string, parts: (Part | string)[], schema: object, effort: Effort): Promise<T> => {
-    const r = await llm.json({ label, system, turns: [user(...parts)], schema, effort });
+  const ask = async <T>(m: LLM, label: string, system: string, parts: (Part | string)[], schema: object, effort: Effort): Promise<T> => {
+    const r = await m.json({ label, system, turns: [user(...parts)], schema, effort });
     usage.push(r.usage);
-    audit.push({ step: label, at: new Date().toISOString(), reply: r.text });
+    audit.push({ step: label, model: m.model, at: new Date().toISOString(), reply: r.text });
     writeFileSync(f('transcript.json'), JSON.stringify(audit, null, 2));
     return parseJson<T>(r.text);
   };
 
   // ── 1. direction ──────────────────────────────────────────────────────────
-  const bpm0 = o.bpm;
   const seconds = Math.min(60, Math.max(8, o.seconds ?? 24));
-  log('1/5 direction');
-  const d = await ask<Direction>('direct', directorSystem(), [directorUser(o.brief, o.kit, Math.round((seconds * (bpm0 ?? 120)) / 60), seconds, bpm0)], directionSchema(), 'high');
-  const bpm = Math.min(140, Math.max(90, bpm0 ?? d.sound?.bpm ?? 120));
-  const target = Math.round(((seconds * bpm) / 60) * 2) / 2;
+  let d: Direction;
+  if (o.direction) d = o.direction;
+  else {
+    log('1/6 direction: concept tournament');
+    const base = directorUser(o.brief, o.kit, Math.round((seconds * (o.bpm ?? 120)) / 60), seconds, o.bpm);
+    const { concepts } = await ask<{ concepts: Concept[] }>(llm, 'concepts', directorSystem(), [conceptsUser(base, 3)], conceptsSchema(), 'high');
+    concepts.forEach((c, k) => log(`  ${k + 1}. "${c.title}" — ${c.idea.slice(0, 160)}`));
+    const pick = await ask<{ ranking: number[]; reasons: string }>(criticLLM, 'pick concept', pickSystem(), [`BRIEF AND BRAND\n${base}`, `CONCEPTS\n${JSON.stringify(concepts.map((c, k) => ({ index: k, ...c })), null, 1)}`], pickSchema(), 'medium');
+    const chosen = concepts[pick.ranking?.find(k => concepts[k]) ?? 0] ?? concepts[0];
+    log(`  picked "${chosen.title}": ${pick.reasons.slice(0, 200)}`);
+    d = await ask<Direction>(llm, 'direct', directorSystem(), [developUser(base, chosen)], directionSchema(), 'high');
+  }
+  const bpm = Math.min(140, Math.max(90, o.bpm ?? d.sound?.bpm ?? 120));
+  const targetBeats = Math.round(((seconds * bpm) / 60) * 2) / 2;
   const ids = new Set<string>();
   d.scenes = d.scenes.slice(0, 12).map((s, i) => {
     let id = (s.id || `scene-${i + 1}`).toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^[^a-z]+/, '').slice(0, 32) || `scene-${i + 1}`;
@@ -122,24 +154,12 @@ export async function invent(llm: LLM, o: InventOptions) {
     ids.add(id);
     return { ...s, id, onscreenText: s.onscreenText ?? [] };
   });
-  const fitted = fitScenes(d.scenes.map(s => s.beats), target);
+  const fitted = fitScenes(d.scenes.map(s => s.beats), targetBeats);
   d.scenes.forEach((s, i) => (s.beats = fitted[i]));
   writeFileSync(f('direction.json'), JSON.stringify(d, null, 2));
   log(`  "${d.title}" — ${d.concept}`);
   log(`  ${d.scenes.length} scenes · ${bpm} BPM · ${d.look.display}${d.look.serif ? ` + ${d.look.serif}` : ''} · ${d.vibe.join(', ')}`);
-
-  // ── 2. lib + score ───────────────────────────────────────────────────────
-  log('2/5 code: shared lib + score');
-  const libOut = await ask<{ lib: string; score: string }>('code lib', coderSystem(), [libUser(d, o.kit)], libSchema(), 'high');
-  let lib = libOut.lib ?? '', score = libOut.score ?? '';
-
-  // ── 3. scenes ────────────────────────────────────────────────────────────
-  log(`3/5 code: ${d.scenes.length} scenes`);
-  const scenes: SceneCode[] = await pool(d.scenes, conc, async (s, i) => {
-    const r = await ask<SceneCode>(`code scene ${s.id}`, coderSystem(), [sceneUser(d, lib, i, bpm)], sceneSchema(), 'high');
-    log(`  ✓ ${s.id} (${r.draw?.length ?? 0} chars)`);
-    return { draw: r.draw ?? '', sfx: r.sfx ?? '', hits: Array.isArray(r.hits) ? r.hits : [] };
-  });
+  const refNote = o.reference ? `\n\nREFERENCE FILM BREAKDOWN (match its craft, pacing and style)\n${o.reference.note}` : '';
 
   const corpus = factCorpus(o.kit, o.brief);
   const allowed = [String(bpm), String(new Date().getFullYear())];
@@ -151,181 +171,232 @@ export async function invent(llm: LLM, o: InventOptions) {
       ...((SERIF_NAMES as readonly string[]).includes(d.look.serif ?? '') ? { serif: d.look.serif } : {}),
     },
   } as PlanInput['brand'];
-  const assemble = (): PlanInput => ({
-    meta: { title: d.title.slice(0, 80) || 'Film', hud: false, captions: false, grain: Math.min(0.2, Math.max(0, Number(d.look.grain) || 0.05)) },
-    brand: brandIn,
-    music: { bpm },
+  let lib = '', score = '';
+  const scenes: SceneCode[] = d.scenes.map(() => ({ draw: '', sfx: '', hits: [] }));
+  const meta = { title: d.title.slice(0, 80) || 'Film', hud: false, captions: false, grain: Math.min(0.2, Math.max(0, Number(d.look.grain) || 0.05)) };
+  const hitsOf = (c: SceneCode, beats: number) => c.hits.filter(h => Number.isFinite(h?.beat) && h.beat >= 0 && h.beat <= beats).slice(0, 32).map(h => ({ beat: h.beat, shake: Math.min(40, Math.max(0, Number(h.shake) || 0)) }));
+  const scenePlan = (i: number, c: SceneCode, withScore = false): PlanInput => ({
+    meta, brand: brandIn, music: { bpm },
+    custom: { lib: lib || undefined, score: withScore ? score || undefined : undefined, scenes: [{ id: d.scenes[i].id, title: d.scenes[i].title.slice(0, 60), draw: c.draw, sfx: c.sfx || undefined, hits: hitsOf(c, d.scenes[i].beats) }] },
+    sections: [{ technique: `scene:${d.scenes[i].id}`, beats: d.scenes[i].beats }],
+  });
+  const filmPlan = (): PlanInput => ({
+    meta, brand: brandIn, music: { bpm },
     custom: {
-      lib: lib || undefined,
-      score: score || undefined,
-      scenes: d.scenes.map((s, i) => ({
-        id: s.id, title: s.title.slice(0, 60), draw: scenes[i].draw, sfx: scenes[i].sfx || undefined,
-        hits: scenes[i].hits.filter(h => Number.isFinite(h.beat) && h.beat >= 0 && h.beat <= s.beats).slice(0, 32).map(h => ({ beat: h.beat, shake: Math.min(40, Math.max(0, h.shake)) })),
-      })),
+      lib: lib || undefined, score: score || undefined,
+      scenes: d.scenes.map((s, i) => ({ id: s.id, title: s.title.slice(0, 60), draw: scenes[i].draw, sfx: scenes[i].sfx || undefined, hits: hitsOf(scenes[i], s.beats) })),
     },
     sections: d.scenes.map((s, i) => ({ technique: `scene:${s.id}`, beats: s.beats, ...(i < d.scenes.length - 1 && s.transition !== 'cut' ? { transition: s.transition as never } : {}) })),
   });
 
   const browser = await launch();
   try {
-    // ── 4. test → fix ─────────────────────────────────────────────────────
-    const test = async (): Promise<{ plan?: Plan; problems: Map<string, string[]> }> => {
-      const problems = new Map<string, string[]>();
-      const add = (k: string, p: string) => problems.set(k, [...(problems.get(k) ?? []), p]);
-      const v = validatePlan(assemble());
-      if (!v.ok) {
-        for (const e of v.errors) {
-          const m = e.path.match(/^custom\.scenes\[(\d+)\]/);
-          add(m ? `scene:${d.scenes[+m[1]].id}` : e.path.startsWith('custom.score') ? 'score' : e.path.startsWith('custom.lib') ? 'lib' : 'plan', `${e.path}: ${e.message}`);
-        }
-        return { problems };
-      }
-      const plan = v.plan;
-      d.scenes.forEach((s, i) => {
-        for (const n of unverifiedNumbers(scenes[i].draw, corpus, allowed)) add(`scene:${s.id}`, `${n}, which is not in the brief or the brand facts; use only the on-screen text from the direction`);
-      });
-      const reel = await openReel(plan, browser);
+    // ── automated test of a (mini) plan: syntax, exceptions, blank/slow frames, audio, facts ──
+    const run = async (input: PlanInput, codeForFacts: string[]): Promise<{ plan?: Plan; problems: string[] }> => {
+      const problems: string[] = [];
+      const v = validatePlan(input);
+      if (!v.ok) return { problems: v.errors.map(e => `${e.path}: ${e.message}`) };
+      for (const c of codeForFacts) for (const n of unverifiedNumbers(c, corpus, allowed)) problems.push(`${n}, which is not in the brief or the brand facts; show only the on-screen text from the direction`);
+      const reel = await openReel(v.plan, browser);
       try {
         const res = await reel.page.evaluate(async secs => {
           const R = window.__reel!;
-          const probes = secs.map(s => [0.02, 0.2, 0.4, 0.6, 0.8, 0.98].map(fr => ({ t: s.start + (s.end - s.start) * fr, ...R.probe!(s.start + (s.end - s.start) * fr) })));
+          const probes = secs.map(s => [0.02, 0.2, 0.4, 0.6, 0.8, 0.98].map(fr => ({ t: (s.end - s.start) * fr, ...R.probe!(s.start + (s.end - s.start) * fr) })));
           let audio = '';
           try { await R.wav!(); } catch (e) { audio = String(e); }
           return { probes, errors: R.errors ?? [], audio };
         }, reel.sections.map(s => ({ start: s.start, end: s.end })));
         for (const e of res.errors) {
-          const k = e.where.startsWith('scene:') ? e.where.split('#')[0] : e.where === 'custom.score' ? 'score' : e.where === 'custom.lib' ? 'lib' : 'plan';
           const at = e.where.match(/draw@([-\d.]+)s/)?.[1];
-          add(k, `${e.where.includes(':sound') ? 'sfx' : k === 'score' ? 'score' : k === 'lib' ? 'lib' : 'draw'} threw ${at ? `at t=${at}s ` : ''}"${e.message}"${e.stack ? `\n  ${e.stack.split('\n').filter(l => /scene-|custom-/.test(l)).slice(0, 2).join('\n  ')}` : ''}`);
+          const part = e.where === 'custom.lib' ? 'lib' : e.where === 'custom.score' ? 'score' : e.where.includes(':sound') ? `${e.where.split('#')[0]} sfx` : `${e.where.split('#')[0]} draw`;
+          problems.push(`${part} threw ${at ? `at t=${at}s ` : ''}"${e.message}"${e.stack ? ` (${e.stack.split('\n').filter(l => /scene-|custom-/.test(l)).slice(0, 2).map(l => l.trim()).join(' / ')})` : ''}`);
         }
-        res.probes.forEach((ps, i) => {
-          const k = `scene:${d.scenes[i].id}`;
+        res.probes.forEach((ps, k) => {
           const slow = ps.filter(p => p.ms > 80);
-          if (slow.length) add(k, `too slow: ${Math.round(Math.max(...slow.map(p => p.ms)))} ms per frame at t=${slow.map(p => (p.t - reel.sections[i].start).toFixed(2)).join(', ')}s (budget 40 ms)`);
-          if (ps.every(p => p.std < 0.012)) add(k, 'every sampled frame is a flat colour: nothing visible is drawn (check that shapes are inside the 1920×1080 frame, alpha > 0, and colours differ from the background)');
+          if (slow.length) problems.push(`${reel.sections[k].technique}: too slow, ${Math.round(Math.max(...slow.map(p => p.ms)))} ms per frame at t=${slow.map(p => p.t.toFixed(2)).join(', ')}s (budget 40 ms)`);
+          if (ps.every(p => p.std < 0.012)) problems.push(`${reel.sections[k].technique}: every sampled frame is a flat colour; nothing visible is drawn`);
         });
-        if (res.audio) add('score', `the soundtrack failed to render: ${res.audio}`);
-        return { plan, problems };
+        if (res.audio) problems.push(`the soundtrack failed to render: ${res.audio}`);
+        return { plan: v.plan, problems };
       } finally {
         await reel.page.context().close();
       }
     };
 
-    const fix = async (problems: Map<string, string[]>, round: number) => {
-      const jobs: Promise<void>[] = [];
-      if (problems.has('lib') || problems.has('score')) {
-        const probs = [...(problems.get('lib') ?? []).map(p => `lib: ${p}`), ...(problems.get('score') ?? []).map(p => `score: ${p}`)];
-        jobs.push(ask<{ lib: string; score: string }>(`fix lib · ${round}`, coderSystem(), [fixUser('the shared lib and the score', { lib, score }, probs)], libSchema(), 'medium').then(r => {
-          lib = r.lib ?? lib; score = r.score ?? score;
-        }));
-      }
-      const sceneKeys = [...problems.keys()].filter(k => k.startsWith('scene:'));
-      jobs.push(pool(sceneKeys, conc, async k => {
-        const i = d.scenes.findIndex(s => `scene:${s.id}` === k);
-        if (i < 0) return;
-        const r = await ask<SceneCode>(`fix scene ${d.scenes[i].id} · ${round}`, coderSystem(), [
-          `DIRECTION (scene "${d.scenes[i].id}"): ${d.scenes[i].idea}\nOn-screen text: ${JSON.stringify(d.scenes[i].onscreenText)}\nLength: ${d.scenes[i].beats} beats at ${bpm} BPM.\n\nSHARED LIB (S.lib)\n\`\`\`js\n${lib}\n\`\`\``,
-          fixUser(`scene "${d.scenes[i].id}"`, { draw: scenes[i].draw, sfx: scenes[i].sfx, hits: JSON.stringify(scenes[i].hits) }, problems.get(k)!),
-        ], sceneSchema(), 'medium');
-        scenes[i] = { draw: r.draw ?? scenes[i].draw, sfx: r.sfx ?? scenes[i].sfx, hits: Array.isArray(r.hits) ? r.hits : scenes[i].hits };
-      }).then(() => {}));
-      await Promise.all(jobs);
-    };
-
-    const testAndFix = async (stage: string): Promise<{ plan: Plan; open: string[] }> => {
-      let last: Awaited<ReturnType<typeof test>> = { problems: new Map() };
-      for (let r = 1; r <= fixRounds + 1; r++) {
-        last = await test();
-        const n = [...last.problems.values()].reduce((a, p) => a + p.length, 0);
-        if (!n && last.plan) {
-          log(`  ${stage}: all scenes run cleanly`);
-          return { plan: last.plan, open: [] };
-        }
-        log(`  ${stage}: ${n} problem(s) in ${[...last.problems.keys()].join(', ')}`);
-        for (const [k, ps] of last.problems) for (const p of ps) log(`    ${k}: ${p.split('\n')[0].slice(0, 150)}`);
-        if (r > fixRounds) break;
-        await fix(last.problems, r);
-      }
-      if (!last.plan) throw new Error('the generated code still does not validate after every fix round');
-      return { plan: last.plan, open: [...last.problems].flatMap(([k, ps]) => ps.map(p => `${k}: ${p}`)) };
-    };
-
-    log('4/5 test → fix');
-    let { plan, open } = await testAndFix('test');
-    writeFileSync(f('plan.json'), JSON.stringify(plan, null, 2));
-
-    // ── 5. design review → rewrite ───────────────────────────────────────
-    const reviews: Review[] = [];
-    for (let r = 1; r <= (o.qaRounds ?? 1); r++) {
-      log(`5/5 design review${(o.qaRounds ?? 1) > 1 ? ` ${r}` : ''}`);
-      const frames = await sceneFrames(plan, browser);
-      const rv = await ask<Review>(`review ${r}`, reviewSystem(), [
-        `DIRECTION\n${JSON.stringify(d, null, 1)}`,
-        ...frames.flatMap(fr => [text(`FRAME t=${fr.t.toFixed(2)}s · scene "${fr.id}"`), image(fr.jpeg, 'image/jpeg')]),
-        'Review the draft.',
-      ], reviewSchema(), 'medium');
-      reviews.push(rv);
-      writeFileSync(f(`review-${r}.json`), JSON.stringify(rv, null, 2));
-      log(`  ${rv.score}/10 · ${rv.summary}`);
-      const redo = (rv.scenes ?? []).filter(s => s.verdict === 'revise' || s.score < 7);
-      for (const s of rv.scenes ?? []) log(`    ${s.id}: ${s.score}/10 ${s.verdict}${s.verdict === 'revise' ? ` — ${s.notes.slice(0, 140)}` : ''}`);
-      if (!redo.length) break;
-      await pool(redo, conc, async note => {
-        const i = d.scenes.findIndex(s => s.id === note.id);
-        if (i < 0) return;
-        const mine = frames.filter(fr => fr.id === note.id);
-        const r2 = await ask<SceneCode>(`revise scene ${note.id} · ${r}`, coderSystem(), [
-          sceneUser(d, lib, i, bpm),
-          `YOUR CURRENT CODE\n--- draw ---\n${scenes[i].draw}\n--- sfx ---\n${scenes[i].sfx}\n\nHow it renders now:`,
-          ...mine.flatMap(fr => [text(`t=${fr.t.toFixed(2)}s`), image(fr.jpeg, 'image/jpeg')]),
-          `DESIGN REVIEW (${note.score}/10): ${note.notes}\n\nRewrite the scene to address the review. Return the complete draw, sfx and hits.`,
-        ], sceneSchema(), 'high');
-        scenes[i] = { draw: r2.draw ?? scenes[i].draw, sfx: r2.sfx ?? scenes[i].sfx, hits: Array.isArray(r2.hits) ? r2.hits : scenes[i].hits };
-      });
-      ({ plan, open } = await testAndFix('retest'));
-      writeFileSync(f('plan.json'), JSON.stringify(plan, null, 2));
+    // ── 2. lib + score, tested on a probe scene ────────────────────────────
+    log('2/6 code: shared lib + score');
+    ({ lib, score } = await ask<{ lib: string; score: string }>(codeLLM, 'code lib', coderSystem(), [libUser(d, o.kit) + refNote], libSchema(), 'high'));
+    const probe: SceneCode = { draw: 'g.fillStyle = S.colors.bg; g.fillRect(0, 0, S.W, S.H); g.fillStyle = S.colors.text; g.fillRect(900, 500, 120, 80);', sfx: '', hits: [] };
+    for (let r = 1; r <= fixRounds; r++) {
+      const res = await run(scenePlan(0, probe, true), []);
+      const libProblems = res.problems.filter(p => /^custom\.(lib|score)|^lib |^score |soundtrack/.test(p));
+      if (!libProblems.length) break;
+      log(`  lib/score: ${libProblems.length} problem(s) → fix ${r}`);
+      ({ lib, score } = await ask<{ lib: string; score: string }>(codeLLM, `fix lib · ${r}`, coderSystem(), [fixUser('the shared lib and the score', { lib, score }, libProblems)], libSchema(), 'medium'));
     }
 
-    // ── outputs ───────────────────────────────────────────────────────────
+    // ── per-scene: write → test/fix → watch → score, best of N, then rewrite rounds ──
+    const testFix = async (i: number, c: SceneCode, tag: string): Promise<SceneCode | null> => {
+      for (let r = 0; r <= fixRounds; r++) {
+        const res = await run(scenePlan(i, c), [c.draw]);
+        if (!res.problems.length) return c;
+        if (r === fixRounds) { log(`    ${d.scenes[i].id} ${tag}: still ${res.problems.length} problem(s), discarded`); return null; }
+        const fixed = await ask<SceneCode>(codeLLM, `fix scene ${d.scenes[i].id} ${tag} · ${r + 1}`, coderSystem(), [
+          `SCENE "${d.scenes[i].id}": ${d.scenes[i].idea}\nOn-screen text: ${JSON.stringify(d.scenes[i].onscreenText)}\nLength: ${d.scenes[i].beats} beats at ${bpm} BPM.\n\nSHARED LIB (S.lib)\n\`\`\`js\n${lib}\n\`\`\``,
+          fixUser(`scene "${d.scenes[i].id}"`, { draw: c.draw, sfx: c.sfx, hits: JSON.stringify(c.hits) }, res.problems),
+        ], sceneSchema(), 'medium');
+        c = cleanScene(fixed, c);
+      }
+      return null;
+    };
+    /** Render a scene's clip (what the critic watches) and measure coverage and motion on the same frames. */
+    const clipOf = async (i: number, input: PlanInput): Promise<{ clip: Buffer; m: MotionReport }> => {
+      const v = validatePlan(input);
+      if (!v.ok) throw new Error('clip of an invalid plan');
+      const reel = await openReel(v.plan, browser);
+      try {
+        const clip = (await renderClips(reel, [{ from: 0, to: reel.duration }], { width: 640, fps: 24 }))[0];
+        const samples = await reel.page.evaluate(([a, b]) => window.__reel!.metrics!(a, b, 1 / 12), [0, reel.duration] as const);
+        const last = i === d.scenes.length - 1;
+        return { clip, m: motionReport(samples, last ? reel.duration - 1.5 : Infinity) };
+      } finally {
+        await reel.page.context().close();
+      }
+    };
+    const measured = (m: MotionReport) =>
+      `MEASURED ON THE RENDER (objective): average frame coverage ${Math.round(m.coverage * 100)}%, empty frames ${Math.round(m.emptyShare * 100)}%, mean motion ${(m.motion * 1000).toFixed(1)}‰ per 1/12 s${m.flags.length ? `\nProblems: ${m.flags.join(' ')}` : ' (no measured problems)'}`;
+    const critique = async (i: number, cm: { clip: Buffer; m: MotionReport }, tag: string) => {
+      const refClip = o.reference?.clips?.[i];
+      const c = await ask<SceneCritique>(criticLLM, `critique ${d.scenes[i].id} ${tag}`, sceneCriticSystem(), [
+        sceneCriticUser(d, i) + refNote,
+        ...(refClip ? [text('REFERENCE SEGMENT (the target to match):'), video(refClip, 12)] : []),
+        text('RENDERED SCENE:'), video(cm.clip, 12),
+        text(measured(cm.m)),
+      ], sceneCriticSchema(), 'medium');
+      // measured problems always reach the rewrite, even if the critic did not list them
+      c.fixes = [...(Array.isArray(c.fixes) ? c.fixes : []), ...cm.m.flags.map(f => `(measured) ${f}`)];
+      return { c, s: critiqueScore(c), clip: cm.clip };
+    };
+
+    const history: Record<string, { step: string; score: number }[]> = {};
+    const best: { code: SceneCode; score: number; critique: SceneCritique; clip: Buffer }[] = new Array(d.scenes.length);
+    log(`3/6 scenes: ${o.candidates ?? 2} candidates each, then up to ${o.rounds ?? 2} watch → rewrite rounds`);
+    await pool(d.scenes, conc, async (s, i) => {
+      history[s.id] = [];
+      const cands = await Promise.all(Array.from({ length: o.candidates ?? 2 }, async (_, k) => {
+        const r = await ask<SceneCode>(codeLLM, `code ${s.id} #${k + 1}`, coderSystem(), [sceneUser(d, lib, i, bpm) + refNote + (k ? `\n\n(Candidate ${k + 1}: take a clearly different creative approach to the same brief.)` : '')], sceneSchema(), 'high');
+        const ok = await testFix(i, cleanScene(r), `#${k + 1}`);
+        if (!ok) return null;
+        const cr = await critique(i, await clipOf(i, scenePlan(i, ok)), `#${k + 1}`);
+        history[s.id].push({ step: `candidate ${k + 1}`, score: cr.s });
+        return { code: ok, score: cr.s, critique: cr.c, clip: cr.clip };
+      }));
+      const good = cands.filter((x): x is NonNullable<typeof x> => !!x).sort((a, b) => b.score - a.score);
+      if (!good.length) throw new Error(`no working version of scene "${s.id}"`);
+      let cur = good[0];
+      log(`  ${s.id}: candidates ${good.map(g => g.score).join(' / ')} → kept ${cur.score}`);
+      for (let r = 1; r <= (o.rounds ?? 2) && cur.score < target && !overBudget(); r++) {
+        const rw = await ask<SceneCode>(codeLLM, `rewrite ${s.id} · ${r}`, coderSystem(), [
+          rewriteUser(d, lib, i, bpm, cur.code, cur.critique, cur.score) + refNote,
+          text('THE CLIP THE REVIEW IS ABOUT:'), video(cur.clip, 12),
+        ], sceneSchema(), 'high');
+        const ok = await testFix(i, cleanScene(rw, cur.code), `r${r}`);
+        if (!ok) continue;
+        const cr = await critique(i, await clipOf(i, scenePlan(i, ok)), `r${r}`);
+        history[s.id].push({ step: `rewrite ${r}`, score: cr.s });
+        log(`  ${s.id}: rewrite ${r} → ${cr.s}${cr.s > cur.score ? ' (kept)' : ` (worse than ${cur.score}, discarded)`}`);
+        if (cr.s > cur.score) cur = { code: ok, score: cr.s, critique: cr.c, clip: cr.clip };
+      }
+      best[i] = cur;
+      scenes[i] = cur.code;
+    });
+    writeFileSync(f('scores.json'), JSON.stringify(history, null, 2));
+
+    // ── 4. the whole film: test, then review with sound, then fix the weakest scenes ──
+    log('4/6 whole film: test');
+    const whole = async () => {
+      for (let r = 0; r <= fixRounds; r++) {
+        const res = await run(filmPlan(), []);
+        // speed is enforced per scene; in the whole film a transition frame draws two scenes at once
+        res.problems = res.problems.filter(p => !p.includes('too slow'));
+        if (!res.problems.length && res.plan) return res.plan;
+        log(`  film: ${res.problems.length} problem(s): ${res.problems.slice(0, 2).join(' | ').slice(0, 200)}`);
+        if (r === fixRounds) break;
+        const libP = res.problems.filter(p => /lib|score|soundtrack/.test(p));
+        if (libP.length) ({ lib, score } = await ask<{ lib: string; score: string }>(codeLLM, `fix lib (film) · ${r + 1}`, coderSystem(), [fixUser('the shared lib and the score', { lib, score }, libP)], libSchema(), 'medium'));
+        for (const [i, s] of d.scenes.entries()) {
+          const mine = res.problems.filter(p => p.includes(`scene:${s.id}`));
+          if (mine.length) scenes[i] = (await testFix(i, scenes[i], 'film')) ?? scenes[i];
+        }
+      }
+      const v = validatePlan(filmPlan());
+      if (!v.ok) throw new Error('the film does not validate');
+      return v.plan;
+    };
+    let plan = await whole();
+    const films: FilmCritique[] = [];
+    for (let r = 1; r <= (o.filmRounds ?? 1) && !overBudget(); r++) {
+      log(`5/6 film review ${r} (video with sound)`);
+      const reel = await openReel(plan, browser);
+      const [filmClip] = await renderClips(reel, [{ from: 0, to: reel.duration }], { width: 640, fps: 24, audio: true });
+      await reel.page.context().close();
+      writeFileSync(f(`review-${r}.mp4`), filmClip);
+      const fc = await ask<FilmCritique>(criticLLM, `film review ${r}`, filmCriticSystem(), [
+        `DIRECTION\n${JSON.stringify(d, null, 1)}${refNote}`,
+        text('THE FILM:'), video(filmClip, 8), 'Review it.',
+      ], filmCriticSchema(), 'medium');
+      films.push(fc);
+      writeFileSync(f(`review-${r}.json`), JSON.stringify(fc, null, 2));
+      log(`  ${fc.score}/10 · ${fc.summary}`);
+      const weak = (fc.scenes ?? []).filter(x => x.score < 8).sort((a, b) => a.score - b.score).slice(0, 3);
+      for (const w of fc.scenes ?? []) log(`    ${w.id}: ${w.score}/10${w.score < 9 ? ` — ${w.fix.slice(0, 120)}` : ''}`);
+      if (!weak.length) break;
+      await pool(weak, conc, async w => {
+        const i = d.scenes.findIndex(s => s.id === w.id);
+        if (i < 0 || !best[i]) return;
+        const cur = best[i];
+        const crit: SceneCritique = { ...cur.critique, fixes: [`(from the whole-film review) ${w.fix}`, ...cur.critique.fixes].slice(0, 4) };
+        const rw = await ask<SceneCode>(codeLLM, `film fix ${w.id} · ${r}`, coderSystem(), [
+          rewriteUser(d, lib, i, bpm, cur.code, crit, cur.score) + refNote,
+          text('THE CLIP THE REVIEW IS ABOUT:'), video(cur.clip, 12),
+        ], sceneSchema(), 'high');
+        const ok = await testFix(i, cleanScene(rw, cur.code), `film${r}`);
+        if (!ok) return;
+        const cr = await critique(i, await clipOf(i, scenePlan(i, ok)), `film${r}`);
+        history[w.id].push({ step: `film fix ${r}`, score: cr.s });
+        log(`  ${w.id}: film fix → ${cr.s}${cr.s >= cur.score ? ' (kept)' : ` (worse than ${cur.score}, discarded)`}`);
+        if (cr.s >= cur.score) { best[i] = { code: ok, score: cr.s, critique: cr.c, clip: cr.clip }; scenes[i] = ok; }
+      });
+      plan = await whole();
+    }
+    writeFileSync(f('scores.json'), JSON.stringify(history, null, 2));
+    writeFileSync(f('plan.json'), JSON.stringify(plan, null, 2));
+
+    // ── 6. outputs ──────────────────────────────────────────────────────────
+    log('6/6 outputs');
     writeFileSync(f('reel.html'), buildHtml(plan));
     const reel = await openReel(plan, browser);
     const sheet = await reel.page.evaluate(([ts]) => window.__reel!.sheet!(ts, 3), [autoTimes(reel)] as const);
     writeFileSync(f('sheet.png'), dataUrlToBuffer(sheet));
     await reel.page.context().close();
-    let video: string | undefined;
+    let videoFile: string | undefined;
     if (o.render !== false) {
-      video = f('video.mp4');
-      const v = await renderVideo(plan, video, { crf: 18, workers: o.workers ?? 3, blur: 6, log: s => process.stderr.write(`\r  ${s}   `) });
+      videoFile = f('video.mp4');
+      const v = await renderVideo(plan, videoFile, { crf: 18, workers: o.workers ?? 3, blur: 6, log: s => process.stderr.write(`\r  ${s}   `) });
       process.stderr.write('\n');
       log(`  rendered ${v.frames} frames in ${v.seconds.toFixed(0)} s`);
     }
     const report = {
-      mode: 'invent', model: llm.model, brief: o.brief, title: d.title, concept: d.concept, vibe: d.vibe, influences: d.influences,
-      seconds: plan.sections.reduce((a, s) => a + s.beats, 0) * (60 / bpm), bpm, scenes: d.scenes.map(s => `${s.id} ${s.beats}`),
-      reviews: reviews.map(r => ({ score: r.score, summary: r.summary })), openProblems: open,
-      usage: summarizeUsage(usage), wallSeconds: Math.round((Date.now() - t0) / 1000),
+      mode: o.reference ? 'replicate' : 'invent', models: { direction: llm.model, code: codeLLM.model, critic: criticLLM.model }, brief: o.brief,
+      title: d.title, concept: d.concept, vibe: d.vibe, influences: d.influences, bpm,
+      seconds: plan.sections.reduce((a, s) => a + s.beats, 0) * (60 / bpm), scenes: d.scenes.map((s, i) => ({ id: s.id, beats: s.beats, score: best[i]?.score, history: history[s.id] })),
+      filmReviews: films.map(r => ({ score: r.score, summary: r.summary })), usage: summarizeUsage(usage), wallSeconds: Math.round((Date.now() - t0) / 1000),
     };
     writeFileSync(f('report.json'), JSON.stringify(report, null, 2));
-    return { plan, direction: d, reviews, usage, video, open };
+    return { plan, direction: d, films, usage, video: videoFile, scores: best.map(b => b?.score) };
   } finally {
     await browser.close();
   }
 }
 
-/** Two frames per scene (40% and 80% through), for the design review. */
-async function sceneFrames(plan: Plan, browser: Browser) {
-  const reel = await openReel(plan, browser);
-  try {
-    const out: { id: string; t: number; jpeg: Buffer }[] = [];
-    for (const s of reel.sections) {
-      for (const fr of [0.4, 0.8]) {
-        const t = s.start + (s.end - s.start) * fr;
-        const url = await reel.page.evaluate(([x]) => window.__reel!.thumb!(x, 768), [t] as const);
-        out.push({ id: s.technique.replace(/^scene:/, ''), t, jpeg: dataUrlToBuffer(url) });
-      }
-    }
-    return out;
-  } finally {
-    await reel.page.context().close();
-  }
-}
+export type { Browser };

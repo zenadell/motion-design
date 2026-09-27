@@ -1,3 +1,6 @@
+import craft from '../../docs/motion-craft.md?raw';
+import exemplar from './exemplars/kinetic-hook.js?raw';
+import { catalogJson } from '../cli/catalog';
 import { STAGE_DOCS } from '../engine/custom/stage';
 import { DISPLAY_NAMES, SERIF_NAMES } from '../plan/fonts';
 import { TRANSITIONS } from '../plan/schema';
@@ -28,20 +31,22 @@ const SEEN_BEFORE = [
 ];
 
 export function directorSystem(): string {
-  return `You are the creative director of a world-class motion design studio, the kind whose brand films win awards. You are inventing an ENTIRELY NEW visual language for a short brand film. Afterwards, you (as a creative coder) will write every frame of it in JavaScript on an HTML canvas, so design something you can actually build with procedural 2D drawing: shapes, lines, type, gradients, masks, noise, particles, projection maths for 3D, offscreen buffers. No photos, video or 3D models.
+  return `You are the creative director of the best motion design studio in the world. Your films go viral on YouTube, TikTok and Instagram and win awards; clients pay six figures for them. You are designing a new brand film. Afterwards you (as a creative coder) will build every frame in JavaScript on an HTML canvas with a professional toolkit (kinetic type animator, 3D camera, particles, morphs, glows, masks, the engine's finished effects as components), so design something you can build with procedural 2D drawing: no photos, video or 3D models.
 
-The bar:
-- One strong, surprising central idea (a visual metaphor or system) carried through every scene, so the film feels designed, not assembled.
-- A considered colour system built on the brand palette (you may add up to 3 extra colours), confident typography, deliberate composition, and a clear rhythm cut to the music.
-- The first second is a striking hook. The last scene resolves on the brand: the logo mark (drawn with S.logo), the name and the site, holding still and clean for at least the final 1.5 seconds.
-- It must feel NEW. Earlier films for this brand used all of the following; do not reuse any of these ideas or anything close to them: ${SEEN_BEFORE.join('; ')}.
+THE BAR: bold, dense, surprising, meticulously cut to the music. Unless the brief asks for calm, the energy is HIGH: the kind of edit people rewatch and share. Austere minimalism, voids, thin lines on black and "restraint" are not what is wanted. Every frame a poster. A single strong idea carried through every scene. Energy that builds to a peak and resolves on the brand. Read the craft handbook below: it is the standard you will be judged by, and its anti-patterns are automatic fails (above all: empty dark frames with thin lines, tiny text, slow openings, uniform timing).
+
+NEW: earlier films for this brand used the following; the film you design must look and feel clearly different (you may still use techniques like kinetic type or colour punches, as long as the overall idea and look are new): ${SEEN_BEFORE.join('; ')}.
 
 Rules:
-- Length: the scenes' beats must add up exactly to the target beats. 4–9 scenes. Beats in multiples of 0.5.
-- On-screen text: short, in the brand's own voice, drawn from the brief and the brand facts. Never invent numbers, clients, places or awards. Every number you show must appear in the brief or the facts.
-- Fonts: choose display from ${DISPLAY_NAMES.join(', ')}; optional serif from ${SERIF_NAMES.join(', ')}.
-- Music: describe an original score (tempo 90–140 BPM, groove, instruments, where it builds and drops) that will be synthesised in code. It must fit the visual idea.
-- Engine transitions between scenes are available (${TRANSITIONS.join(', ')}), but a designed transition inside your scenes (a match cut, a shape that becomes the next scene) is usually stronger; then use "cut".`;
+- Length: the scenes' beats must add up exactly to the target beats. 6–10 scenes; beats in multiples of 0.5. Most scenes 2–6 beats (short scenes stay dynamic; long ones go static), at most one scene longer than 8 beats. The first second is the most striking frame of the film.
+- The last scene resolves on the brand: the logo mark (S.logo / S.logoPath / S.logoPoints), the name and the site, holding still and clean for the final 1.5 seconds.
+- On-screen text: short, punchy, in the brand's own voice, from the brief and the brand facts. Never invent numbers, clients, places or awards.
+- Fonts: display from ${DISPLAY_NAMES.join(', ')}; optional serif from ${SERIF_NAMES.join(', ')}.
+- Music: an original score (90–140 BPM) that drives the picture: groove, builds, drops, a breath before the logo, a final chord that rings.
+- For each scene write the idea as a precise shot description: what is on screen, how it moves, beat by beat, and how it connects to the next scene (designed transitions beat engine transitions: prefer "cut" with a match cut built into the scenes).
+
+# Craft handbook
+${craft}`;
 }
 
 export function directorUser(brief: string, kit: BrandKit, beats: number, seconds: number, bpm?: number): string {
@@ -125,23 +130,44 @@ export interface Direction {
   scenes: { id: string; title: string; beats: number; idea: string; onscreenText: string[]; transition: string }[];
 }
 
-export function coderSystem(): string {
-  return `You are a world-class creative coder turning a motion design direction into code. You write JavaScript function bodies that draw every frame of a 1920×1080 60 fps brand film on an HTML canvas, and that synthesise its sound. The result must look like a premium studio piece, faithful to the direction.
+let techList: string | undefined;
+/** The engine's finished techniques, usable as components via S.fx(id, g, t, params, beats). */
+function techniquesForFx(): string {
+  return (techList ??= catalogJson()
+    .techniques.map(t => {
+      const props = Object.keys((t.params as { properties?: Record<string, unknown> }).properties ?? {});
+      return `- ${t.id} (${t.beats.default} beats): ${t.summary.split('. ')[0]}. params: ${props.join(', ') || 'none'}. example: ${JSON.stringify(t.example)}`;
+    })
+    .join('\n'));
+}
 
-Craft:
-- Motion: ease everything (S.ease), anticipate and overshoot, stagger elements, layer foreground/background for depth, and land the big moves on beats (S.b(n)). Use S.beatPhase(t) for things that pulse with the music.
-- Readability: text is large, well kerned, inside a 90 px safe margin, and fully readable for at least 0.6 s. Strong contrast against what is behind it.
-- Continuity: the first frame of a scene should connect to where the previous scene ended; designed transitions beat engine transitions.
-- Texture and light: gradients, soft glows (radial gradients are cheap; avoid huge shadowBlur), grain, noise-driven organic movement.
-- Only show the on-screen text given in the direction (it has been checked against the brand facts). Never add numbers or claims of your own.
+export function coderSystem(): string {
+  return `You are the best creative coder in motion design. You turn a direction into JavaScript function bodies that draw every frame of a 1920×1080 60 fps brand film on an HTML canvas, and synthesise its sound. The result must look like a six-figure studio piece, faithful to the direction, and pass the craft handbook with no anti-patterns.
+
+How you work:
+- Plan each scene as a beat-by-beat timeline first (in comments at the top of the draw body), then build it in layers: background (never an empty flat field: light, gradient, texture), midground, foreground hero, overlay details.
+- Use the pro toolkit: S.type for kinetic type, S.kf / S.spring for motion curves, S.cam for 3D, S.glow / S.bloom for light, S.morph / S.iconPoints / S.logoPoints for particles, S.layer for masks and composites, S.fx for the engine's finished effects when they serve the idea.
+- Hero type 160–400 px. Every key word fully readable for at least 0.6 s. Something happens on every beat during energy sections.
+- Only show the on-screen text given in the direction. Never add numbers or claims of your own.
 
 Code rules (the engine enforces them; violations come back to you as errors):
 - Each draw body paints the ENTIRE frame from scratch at time t, as a pure function of t. Clamp progress values; t may be slightly outside 0..S.dur during transitions.
-- g.save()/g.restore() around transforms, clips and alpha changes.
-- Keep it fast: under ~40 ms per frame.
+- g.save()/g.restore() around transforms, clips, filters and alpha changes.
+- Keep it fast: under ~40 ms per frame at 1920×1080.
 - Plain modern JavaScript. No imports, no DOM, no timers, no Date. Return nothing from draw.
 
-${STAGE_DOCS}`;
+${STAGE_DOCS}
+
+## Engine techniques available through S.fx
+${techniquesForFx()}
+
+# Craft handbook
+${craft}
+
+# Exemplar (a craft reference for code quality, layering and timing; do NOT copy its idea, copy or layout)
+\`\`\`js
+${exemplar}
+\`\`\``;
 }
 
 export function libUser(d: Direction, kit: BrandKit): string {
@@ -211,15 +237,87 @@ CURRENT CODE
 ${Object.entries(code).map(([k, v]) => `--- ${k} ---\n${v}`).join('\n\n')}`;
 }
 
-export function reviewSystem(): string {
-  return `You are the design director reviewing a draft brand film against its direction. You get the direction and frames rendered from each scene (labelled with time and scene id).
+// ── Video critique (v2) ─────────────────────────────────────────────────────
 
-Judge like a top studio would: Is the central idea clear and carried through? Does each scene look finished and premium? Is text readable and well set? Is anything broken, empty, clipped, cluttered, off-palette or generic? Does the last scene land cleanly on the brand?
+export const RUBRIC = ['idea', 'composition', 'typography', 'motion', 'rhythm', 'light_colour', 'polish', 'wow'] as const;
 
-Mid-animation frames can be in motion; judge what the viewer sees. For each scene give a score 1–10 and a verdict: "keep" (7+) or "revise", with concrete, buildable notes (what to draw differently, sizes, positions, timing, colours).`;
+export function sceneCriticSystem(): string {
+  return `You are the toughest design director in motion design, reviewing a scene from a brand film against its direction and the craft handbook. You WATCH the rendered clip (video) and judge what a viewer experiences: motion, timing, composition, typography, light, polish.
+
+Score each dimension 1–10 against a six-figure studio standard (10 = world-class, 8 = ship it, 6 = competent but forgettable, 4 = amateur):
+- idea: the scene clearly expresses the direction's concept, not a generic stand-in
+- composition: every frame is a poster; frame filled deliberately; clear focal point; no dead or empty frames
+- typography: size, weight, spacing, readability (≥ 0.6 s fully legible), no clipping or overlaps
+- motion: easing, anticipation, overshoot, follow-through, secondary motion; nothing linear or uniform
+- rhythm: changes land on beats; energy matches the scene's role; holds where messages need them
+- light_colour: palette discipline, contrast, light and depth (not murky or flat)
+- polish: no bugs, flicker, jitter, broken frames, stray elements or text outside the safe area
+- wow: would a motion designer stop scrolling for this?
+
+Then give the three most important fixes as concrete, buildable instructions (what to draw, where, how big, when, with which easing), most impactful first. Be specific and harsh; praise nothing that is not excellent.
+${'\n'}# Craft handbook
+${craft}`;
 }
 
-export const reviewSchema = () => ({
+export const sceneCriticSchema = () => ({
+  type: 'object',
+  properties: {
+    scores: { type: 'object', properties: Object.fromEntries(RUBRIC.map(k => [k, { type: 'integer', minimum: 1, maximum: 10 }])), required: [...RUBRIC] },
+    observed: { type: 'string', description: 'what actually happens in the clip, beat by beat, in 2–4 sentences' },
+    fixes: { type: 'array', items: { type: 'string' }, description: 'the three most important fixes, most impactful first' },
+  },
+  required: ['scores', 'observed', 'fixes'],
+});
+
+export interface SceneCritique {
+  scores: Record<(typeof RUBRIC)[number], number>;
+  observed: string;
+  fixes: string[];
+}
+
+/** One number per critique: the mean, pulled down by the weakest dimension (one broken aspect sinks a scene). */
+export function critiqueScore(c: SceneCritique): number {
+  const v = RUBRIC.map(k => Math.max(1, Math.min(10, Number(c.scores?.[k]) || 1)));
+  const mean = v.reduce((a, b) => a + b, 0) / v.length;
+  return Math.round((0.7 * mean + 0.3 * Math.min(...v)) * 10) / 10;
+}
+
+export function sceneCriticUser(d: Direction, i: number): string {
+  const s = d.scenes[i];
+  return `DIRECTION (film)
+${JSON.stringify({ title: d.title, concept: d.concept, vibe: d.vibe, look: d.look, motion: d.motion }, null, 1)}
+
+THIS SCENE (${i + 1}/${d.scenes.length}): "${s.id}" — ${s.title}, ${s.beats} beats
+Idea: ${s.idea}
+On-screen text: ${JSON.stringify(s.onscreenText)}
+
+Watch the clip and review it.`;
+}
+
+export function rewriteUser(d: Direction, lib: string, i: number, bpm: number, code: { draw: string; sfx: string }, c: SceneCritique, score: number): string {
+  return `${sceneUser(d, lib, i, bpm)}
+
+YOUR CURRENT CODE
+--- draw ---
+${code.draw}
+--- sfx ---
+${code.sfx}
+
+REVIEW OF THE CLIP ABOVE (${score}/10; ${RUBRIC.map(k => `${k} ${c.scores?.[k] ?? '?'}`).join(', ')})
+What the reviewer saw: ${c.observed}
+Fixes, most important first:
+${c.fixes.map((f, k) => `${k + 1}. ${f}`).join('\n')}
+
+Rewrite the scene to fix these and raise every weak dimension. You may restructure it completely if that is what it takes. Return the complete draw, sfx and hits.`;
+}
+
+export function filmCriticSystem(): string {
+  return `You are the toughest design director in motion design, reviewing a complete brand film (video with sound) against its direction and the craft handbook. Judge the whole: the idea, the arc and energy curve, continuity between scenes, sync of picture to music, and the ending on the brand. Then score every scene in context (1–10) with the single most important fix for each scene below 9.
+${'\n'}# Craft handbook
+${craft}`;
+}
+
+export const filmCriticSchema = () => ({
   type: 'object',
   properties: {
     score: { type: 'integer', minimum: 1, maximum: 10 },
@@ -228,21 +326,73 @@ export const reviewSchema = () => ({
       type: 'array',
       items: {
         type: 'object',
-        properties: {
-          id: { type: 'string' },
-          score: { type: 'integer', minimum: 1, maximum: 10 },
-          verdict: { type: 'string', enum: ['keep', 'revise'] },
-          notes: { type: 'string' },
-        },
-        required: ['id', 'score', 'verdict', 'notes'],
+        properties: { id: { type: 'string' }, score: { type: 'integer', minimum: 1, maximum: 10 }, fix: { type: 'string' } },
+        required: ['id', 'score', 'fix'],
       },
     },
   },
   required: ['score', 'summary', 'scenes'],
 });
 
-export interface Review {
+export interface FilmCritique {
   score: number;
   summary: string;
-  scenes: { id: string; score: number; verdict: 'keep' | 'revise'; notes: string }[];
+  scenes: { id: string; score: number; fix: string }[];
+}
+
+// ── Concept tournament ──────────────────────────────────────────────────────
+
+export const conceptsSchema = () => ({
+  type: 'object',
+  properties: {
+    concepts: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          title: { type: 'string' },
+          idea: { type: 'string', description: 'the central idea and the look, 2–3 sentences' },
+          hook: { type: 'string', description: 'the first 2 seconds, precisely' },
+          signature: { type: 'string', description: 'the one moment people will remember and share' },
+          build: { type: 'string', description: 'how it is built with the toolkit (which techniques, why it is feasible on a 2D canvas)' },
+        },
+        required: ['title', 'idea', 'hook', 'signature', 'build'],
+      },
+    },
+  },
+  required: ['concepts'],
+});
+
+export interface Concept {
+  title: string;
+  idea: string;
+  hook: string;
+  signature: string;
+  build: string;
+}
+
+export function conceptsUser(base: string, n: number): string {
+  return `${base}
+
+First, pitch ${n} radically different concepts (different ideas, looks and energies, not variations of one). Each must be buildable in code with the toolkit and must be high-energy and dense.`;
+}
+
+export const pickSchema = () => ({
+  type: 'object',
+  properties: {
+    ranking: { type: 'array', items: { type: 'integer' }, description: 'concept indexes, best first' },
+    reasons: { type: 'string' },
+  },
+  required: ['ranking', 'reasons'],
+});
+
+export function pickSystem(): string {
+  return `You are the executive creative director deciding which concept the studio will make. Rank the concepts by: (1) wow: would it stop the scroll and get shared, (2) buildability: can it be executed to a premium standard with procedural 2D canvas code and the toolkit (kinetic type, particles, 3D wireframes/cards, glows, masks, morphs; no photos or 3D models), (3) fit: does it express this brand and brief, (4) energy: dense and rhythmic, not austere. Be decisive.`;
+}
+
+export function developUser(base: string, c: Concept): string {
+  return `${base}
+
+DEVELOP THIS CONCEPT into the full direction (keep its idea, hook and signature moment):
+${JSON.stringify(c, null, 1)}`;
 }

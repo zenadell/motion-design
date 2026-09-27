@@ -2,7 +2,7 @@
 // anything that can return JSON (another API, a local model, a test fake)
 // can implement it.
 
-export type Part = { text: string } | { image: { mime: string; data: string } };
+export type Part = { text: string } | { image: { mime: string; data: string } } | { video: { mime: string; data: string; fps?: number } };
 
 export interface Turn {
   role: 'user' | 'model';
@@ -48,6 +48,8 @@ export class LLMError extends Error {
 
 export const text = (t: string): Part => ({ text: t });
 export const image = (data: Buffer, mime = 'image/png'): Part => ({ image: { mime, data: data.toString('base64') } });
+/** A short video clip; `fps` is how many frames per second the model samples (default 1, max 24). */
+export const video = (data: Buffer, fps = 10, mime = 'video/mp4'): Part => ({ video: { mime, data: data.toString('base64'), fps } });
 export const user = (...parts: (Part | string)[]): Turn => ({ role: 'user', parts: parts.map(p => (typeof p === 'string' ? text(p) : p)) });
 export const model = (t: string): Turn => ({ role: 'model', parts: [text(t)] });
 
@@ -98,6 +100,7 @@ export const PRICES: Record<string, { input: number; output: number; note?: stri
   'gemini-3.6-flash': { input: 0.75, output: 3.75, note: 'introductory price until 2026-12-31, then $1.50 / $7.50' },
   'gemini-3.5-flash': { input: 1.5, output: 9 },
   'gemini-3.1-flash-lite': { input: 0.25, output: 1.5 },
+  'gemini-3.1-pro': { input: 2, output: 12, note: 'up to 200k-token prompts' },
 };
 
 export function priceOf(modelId: string) {

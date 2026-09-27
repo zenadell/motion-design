@@ -38,7 +38,11 @@ export class Gemini implements LLM {
   async json(req: JsonRequest): Promise<JsonReply> {
     const contents: Content[] = req.turns.map(t => ({
       role: t.role,
-      parts: t.parts.map(p => ('text' in p ? { text: p.text } : { inlineData: { mimeType: p.image.mime, data: p.image.data } })),
+      parts: t.parts.map(p =>
+        'text' in p ? { text: p.text }
+        : 'image' in p ? { inlineData: { mimeType: p.image.mime, data: p.image.data } }
+        : { inlineData: { mimeType: p.video.mime, data: p.video.data }, ...(p.video.fps ? { videoMetadata: { fps: p.video.fps } } : {}) },
+      ),
     }));
     let thinking = !!req.effort;
     for (let attempt = 0; ; attempt++) {

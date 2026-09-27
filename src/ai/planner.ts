@@ -84,7 +84,7 @@ export class Planner {
 
   /** The conversation so far (user prompts and raw model replies), for audit. */
   transcript(): { role: string; text: string }[] {
-    return this.turns.map(t => ({ role: t.role, text: t.parts.map(p => ('text' in p ? p.text : `[image ${p.image.mime}]`)).join('\n') }));
+    return this.turns.map(t => ({ role: t.role, text: t.parts.map(p => ('text' in p ? p.text : 'image' in p ? `[image ${p.image.mime}]` : `[video ${p.video.mime}]`)).join('\n') }));
   }
 
   revise(feedback: string): Promise<PlanResult> {

@@ -114,30 +114,44 @@ CI runs this on every push. The unit tests in `test/ai.test.ts` drive the planne
 
 ## Invent mode: the model designs and codes the whole film
 
-`motion make` chooses from the technique library, so every film shares its look. `motion invent` lets the model build something new: it designs a visual language and writes the drawing and sound code for every scene itself.
+`motion make` chooses from the technique library, so every film shares its look. `motion invent` lets the model build something new: it designs a visual language and writes the drawing and sound code for every scene itself. Because code written blind is weak, the pipeline makes the model **watch** what it wrote and keep only what the critic scores higher.
 
 ```bash
-motion invent --brand out/brand.json --brief "Invent an entirely new visual language. Surprise us." --seconds 24 -o out/film
+motion invent --brand out/brand.json --brief "Invent an entirely new visual language. Surprise us." --seconds 24 \
+  --candidates 2 --rounds 2 --film-rounds 1 --budget 5 -o out/film
 ```
 
-1. **Direction** (thinking: high). A concept, influences, palette roles (brand colours plus up to 3 extras), type, composition, texture, motion principles, an original score, and 4–9 scenes with their on-screen text. The prompt lists every idea earlier films used, so none of them come back.
-2. **Code.** A shared `lib` (helpers for a consistent look) and a `score` (the whole soundtrack, synthesised). Then every scene's `draw` and `sfx`, written in parallel against the [Stage API](../src/engine/custom/stage.ts) (`STAGE_DOCS`).
-3. **Test → fix.** The code runs in headless Chromium. The model gets the problems back and fixes them, up to 3 rounds:
-   - exceptions, with the scene, the time and the stack line;
-   - frames slower than 80 ms;
-   - scenes that draw nothing visible;
-   - numbers in on-screen strings that aren't in the brief or the facts.
-4. **Design review.** Two frames per scene go back to the model with the direction. It scores each scene and rewrites the ones it marks "revise", using its own frames and notes, then everything is re-tested.
-5. The film renders like any plan: motion blur, the synthesised score and the scene sound effects, MP4.
+1. **Concept tournament.** The director pitches 3 radically different concepts (idea, hook, signature moment, how to build it). A judging pass ranks them on wow, buildability, fit and energy, and the winner is developed into the full direction: shot list, type, palette, motion principles and score. The director works to the standard in the [craft handbook](motion-craft.md).
+2. **Code.** A shared `lib` and `score` are written, then tested on a probe scene and fixed. The coder gets:
+   - the [Stage API](../src/engine/custom/stage.ts) and the pro toolkit: `S.type` kinetic type, `S.kf` keyframes, `S.spring`, the `S.cam` 3D camera and cards, `S.glow`/`S.bloom`, `S.drawOn`, particle morphs from icons and the logo, and `S.fx` (the engine's finished techniques as components);
+   - the handbook;
+   - an [exemplar](../src/ai/exemplars/kinetic-hook.js) of the code quality expected.
+3. **Every scene:**
+   - **N candidates** (a different creative approach each), tested and auto-fixed: exceptions, slow or blank frames, invented numbers.
+   - Each candidate is rendered to a 640-px clip. The critic **watches the video** at 12 fps together with **objective measurements** (frame coverage, and still stretches with timestamps). It scores 8 dimensions (idea, composition, typography, motion, rhythm, light and colour, polish, wow) and lists the top fixes. The score is 0.7 × mean + 0.3 × the worst dimension.
+   - The best candidate goes through **watch → critique → rewrite** rounds. A rewrite is kept only if its score is higher. This stops at the target score or the budget.
+4. **The whole film** is tested, rendered with sound, and watched by a film critic. It scores every scene in context, and the weakest scenes get another rewrite pass.
+5. The final render has motion blur, the synthesised score and the scene sound effects. Everything is saved:
+   - `direction.json`, `plan.json` (all the code), `scores.json` (every candidate and round) and `review-N.mp4`/`.json`;
+   - `transcript.json` (every raw reply) and `report.json` (tokens and cost).
 
-Scene code is sandboxed:
-- no DOM, network, timers or clocks;
-- a seeded `Math.random`;
-- page requests are blocked while rendering.
+Roles can use different models: `--code-model gemini-3.1-pro-preview --critic-model gemini-3.8-flash`. `--budget` caps optional refinement spend.
 
-The code is stored in the plan (`custom.lib`, `custom.score`, `custom.scenes[]`), so a film can be re-rendered, inspected or edited like any other plan.
+Scene code is sandboxed: no DOM, network, timers or clocks, and a seeded `Math.random`. Page requests are blocked while rendering.
 
-**First live run** (Jomiez, 24 s, Gemini 3.8 Flash, one review round):
-- **What Gemini made:** "The Harmonic Blueprint", 6 scenes and about 45k characters of JavaScript.
-- **Test and review:** 2 automatic fix rounds, a review at 6/10, then 3 scenes rewritten.
-- **Cost and time:** 15 model calls, $0.70, 9 minutes, then the render.
+## Replicate mode: rebuild a film you love
+
+```bash
+motion replicate reference.mp4 --brand out/brand.json --brief "Our launch film" [--keep-colors] -o out/replica
+```
+
+1. The model watches the reference (with sound) and writes a shot-by-shot breakdown: timing, composition, motion and easing, type, colour, texture, camera, transitions and music.
+2. It adapts the breakdown to the brand. It keeps the structure, pacing, shot types and motion language, and swaps in the brand's copy (facts only), palette and logo.
+3. The invent pipeline rebuilds it. Every scene critique watches the **reference segment and the render side by side**.
+
+## Results so far (Jomiez, 24 s, Gemini 3.8 Flash for every role)
+
+| run | pipeline | cost | result |
+|---|---|---|---|
+| v1 | direct → code → one still-frame review | $0.70 | "The Harmonic Blueprint": thin lines on black, mostly empty; its own review 6/10 |
+| v2 | + toolkit, handbook, exemplar, video critique, 2 candidates, 2 rewrite rounds, film review | $1.85 | "Architecture of Intelligence": bold type on 3D slabs, motion-blur streaks, animated dashboards; film review 8/10, scene scores 4.6–6.4 |

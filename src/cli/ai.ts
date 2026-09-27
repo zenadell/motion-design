@@ -5,6 +5,7 @@ import { loadBrandKit } from '../ai/brand-kit';
 import { Gemini, DEFAULT_MODEL, apiKey } from '../ai/gemini';
 import { summarizeUsage, type LLM, type Usage } from '../ai/llm';
 import { invent } from '../ai/invent';
+import { replicate } from '../ai/replicate';
 import { make } from '../ai/pipeline';
 import { Planner } from '../ai/planner';
 import { review } from '../ai/qa';
@@ -129,12 +130,34 @@ export async function runAi(cmd: string, pos: string[], flags: Flags): Promise<b
       } else throw new Error('missing <url> or --brand brand.json');
       mkdirSync(dir, { recursive: true });
       writeFileSync(join(dir, 'brand.json'), JSON.stringify(kit, null, 2));
+      const sub = (flag: string) => (str(flags[flag]) ? new Gemini({ model: str(flags[flag]), log }) : undefined);
       const res = await invent(llm, {
         kit, brief: readBrief(flags), seconds: num(flags.seconds), bpm: num(flags.bpm),
-        qaRounds: flags['no-qa'] ? 0 : num(flags.qa) ?? 1, render: !flags['no-render'], workers: num(flags.workers) ?? 3, outDir: dir, log,
+        candidates: num(flags.candidates), rounds: num(flags.rounds), filmRounds: flags['no-qa'] ? 0 : num(flags['film-rounds']),
+        budget: num(flags.budget), target: num(flags.target), render: !flags['no-render'], workers: num(flags.workers) ?? 3, outDir: dir, log,
+        codeLLM: sub('code-model'), criticLLM: sub('critic-model'),
       });
       printUsage(res.usage);
-      if (res.open.length) log(`! ${res.open.length} problem(s) the model did not fix:\n${res.open.map(p => `  ${p.split('\n')[0]}`).join('\n')}`);
+      log(`  scene scores: ${res.scores.join(' · ')}${res.films.length ? ` · film ${res.films.map(f => f.score).join(' → ')}/10` : ''}`);
+      console.log(`✓ ${res.video ?? join(dir, 'plan.json')} — "${res.direction.title}"`);
+      return true;
+    }
+    case 'replicate': {
+      if (!pos[0]) throw new Error('missing <reference.mp4>');
+      if (!str(flags.brand)) throw new Error('missing --brand brand.json');
+      const dir = out ?? 'out/replicate';
+      const llm = gemini(flags);
+      const kit = loadBrandKit(JSON.parse(readFileSync(str(flags.brand)!, 'utf8')));
+      const sub = (flag: string) => (str(flags[flag]) ? new Gemini({ model: str(flags[flag]), log }) : undefined);
+      const res = await replicate(llm, {
+        videoFile: pos[0], kit, brief: readBrief(flags), keepColors: !!flags['keep-colors'],
+        candidates: num(flags.candidates), rounds: num(flags.rounds), filmRounds: flags['no-qa'] ? 0 : num(flags['film-rounds']),
+        budget: num(flags.budget), target: num(flags.target), render: !flags['no-render'], workers: num(flags.workers) ?? 3, outDir: dir, log,
+        codeLLM: sub('code-model'), criticLLM: sub('critic-model'),
+      });
+      writeFileSync(join(dir, 'breakdown.json'), JSON.stringify(res.breakdown, null, 2));
+      printUsage([...res.usageExtra, ...res.usage]);
+      log(`  scene scores: ${res.scores.join(' · ')}${res.films.length ? ` · film ${res.films.map(f => f.score).join(' → ')}/10` : ''}`);
       console.log(`✓ ${res.video ?? join(dir, 'plan.json')} — "${res.direction.title}"`);
       return true;
     }

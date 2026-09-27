@@ -50,3 +50,33 @@ describe('invent helpers', () => {
     expect(r).toEqual(['"SINCE 2019" states 2019']);
   });
 });
+
+import { motionReport } from '../src/ai/metrics';
+import { critiqueScore } from '../src/ai/invent-prompts';
+import { kf, spring } from '../src/engine/custom/toolkit';
+
+describe('refinement signals', () => {
+  it('finds still stretches and empty frames, ignoring the final hold', () => {
+    const s = Array.from({ length: 49 }, (_, i) => ({ t: i / 12, coverage: i < 12 ? 0.02 : 0.4, motion: i >= 20 && i <= 34 ? 0 : 0.02 }));
+    const r = motionReport(s);
+    expect(r.staticRuns).toHaveLength(1);
+    expect(r.staticRuns[0][0]).toBeCloseTo(19 / 12, 5);
+    expect(r.flags.join(' ')).toMatch(/nothing moves from 1\.58 s/);
+    expect(motionReport(s, 20 / 12).staticRuns).toHaveLength(0);
+    expect(motionReport(s.map(x => ({ ...x, coverage: 0.01 }))).flags[0]).toMatch(/mostly empty/);
+  });
+  it('weights the worst rubric dimension', () => {
+    const all8 = { idea: 8, composition: 8, typography: 8, motion: 8, rhythm: 8, light_colour: 8, polish: 8, wow: 8 };
+    expect(critiqueScore({ scores: all8, observed: '', fixes: [] })).toBe(8);
+    expect(critiqueScore({ scores: { ...all8, polish: 2 }, observed: '', fixes: [] })).toBeLessThan(7);
+  });
+  it('keyframes and springs', () => {
+    const E = { inOutCubic: (t: number) => t, outExpo: (t: number) => t };
+    expect(kf(E, 0.5, [[0, 0], [1, 100]])).toBe(50);
+    expect(kf(E, 2, [[0, [0, 0]], [1, [10, 20], 'outExpo']])).toEqual([10, 20]);
+    expect(spring(0)).toBe(0);
+    const peak = Math.max(...Array.from({ length: 100 }, (_, i) => spring(i / 100, 200, 10)));
+    expect(peak).toBeGreaterThan(1);
+    expect(spring(3, 200, 10)).toBeCloseTo(1, 2);
+  });
+});
