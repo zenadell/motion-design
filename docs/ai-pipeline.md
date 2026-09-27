@@ -181,6 +181,7 @@ motion replicate reference.mp4 --brand out/brand.json --brief "Our launch film" 
 | v2 | + toolkit, handbook, exemplar, video critique, 2 candidates, 2 rewrite rounds, film review | $1.85 | "Architecture of Intelligence": bold type on 3D slabs, motion-blur streaks, animated dashboards; film review 8/10, scene scores 4.6–6.4 |
 | v3 | + concept tournament, coverage and motion measurements | stopped (credits) | "Molten Silicon": scenes scored 3–5 before the account ran out |
 | v4 | + crafted presets, the two hand-made reels as the bar (videos and code), client feedback | $5.35 + $0.57 refine | "Kinetic Riso Press": huge editorial type, paper, flame-orange and ink alternating, split grids, a type iris, breakbeat score. Film review 9/10; scene scores 4.4–6.5. The ending (2.9) was refined to 4.7 with `motion refine` |
+| v5 | + the set-piece library; 1 candidate, 1 rewrite round, bar videos only (no bar code) | $1.83 | "Kinetic Foundry": cream / flame-orange / ink riso world built on four set pieces (3D extruded SOFTWARE over a floor with the camera crashing through the letters, a tilted type cylinder, a shatter into WHAT WE DO BEST, a portal flight). Film review 8/10; scene scores 4.4–5.6. Weakest part again the ending (a small logo in a dark box). `motion refine` ($0.30) produced a much better ending on `S.set.extrude` (400-px 3D logo, 220-px name), but Gemini rejected it: its head-to-head judge picked whichever version it saw first in both orders, and its critic misread the 400-px logo as 200 px. A human pick put it in the final cut |
 
 The cost column is an upper bound: it prices every input token at the full rate, but repeated prompt prefixes (the bar films and code) are billed at Gemini's cached-token rate.
 
@@ -196,15 +197,18 @@ The cost column is an upper bound: it prices every input token at the full rate,
 
 `scripts/film-profile.py film.mp4 …` prints an objective craft profile of rendered films side by side: cuts per beat, cut beat-sync, accents per beat, motion energy, longest still, frame fill, light/dark alternation.
 
-| metric | Jomiez reel (hand-made) | résumé reel (hand-made) | invent v4 (Gemini) | invent v2 (Gemini) | invent v1 (Gemini) |
-|---|---:|---:|---:|---:|---:|
-| cuts per beat | 0.37 | 0.57 | 0.73 | 0.19 | 0 |
-| cuts on the 16th grid | 95% | 77% | 63% | 78% | – |
-| accents per beat | 1.21 | 1.47 | 1.10 | 0.52 | 0.15 |
-| motion (mean, ‰) | 12.7 | 41.3 | 25.8 | 6.4 | 0.9 |
-| longest still | 0.48 s | 0.37 s | 0.77 s | 2.32 s | 3.33 s |
-| frame fill (mean) | 0.12 | 0.23 | 0.31 | 0.12 | 0.05 |
+| metric | Jomiez reel (hand-made) | résumé reel (hand-made) | invent v5 (Gemini + set pieces) | invent v4 (Gemini) | invent v2 (Gemini) | invent v1 (Gemini) |
+|---|---:|---:|---:|---:|---:|---:|
+| cuts per beat | 0.37 | 0.57 | 0.58 | 0.73 | 0.19 | 0 |
+| cuts on the 16th grid | 95% | 77% | 71% | 63% | 78% | – |
+| accents per beat | 1.21 | 1.47 | 0.92 | 1.10 | 0.52 | 0.15 |
+| motion (mean, ‰) | 12.7 | 41.3 | 34.8 | 25.8 | 6.4 | 0.9 |
+| longest still | 0.48 s | 0.37 s | 0.68 s | 0.77 s | 2.32 s | 3.33 s |
+| frame fill (mean) | 0.12 | 0.23 | 0.61 | 0.31 | 0.12 | 0.05 |
+| light/dark flips per beat | 0.19 | 0.53 | 0.48 | 0.23 | – | – |
 
 By v4 the generated film matches the hand-made reels on energy, fill and cutting. It trails on beat precision and stillness, and above all on **set pieces**: scenes with depth, particles and light that carry production value. Flat type on colour, however busy, reads as "template".
+
+**Set pieces (v5):** with the library, Gemini built four genuine set-piece scenes in its first film using them, its cut beat-sync rose from 63% to 71%, its longest still fell from 0.77 s to 0.68 s, and its light/dark alternation reached the résumé reel's level. Self-judging stayed the weak link: the best ending it wrote was rejected by its own judge (position bias) and had to be picked by a person. Letting the client pick between variants is the most reliable judge.
 
 **Pro as coder (one scene, head to head):** Gemini 3.1 Pro rewrote v4's weakest scene twice. Rewrite 1 scored 5.7 on the rubric but lost head to head. Rewrite 2 scored 3.7 but won it. The two judges disagreed completely, and a human review ranked rewrite 1 first. All three versions kept the same modest idea and a 2-second freeze.
