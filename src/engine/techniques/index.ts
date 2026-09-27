@@ -35,6 +35,13 @@ export const TECHNIQUES: Technique[] = [
 
 const byId = new Map(TECHNIQUES.map(t => [t.id, t]));
 export const techniqueIds = (): string[] => TECHNIQUES.map(t => t.id);
+
+// Code-defined scenes ("scene:<id>") of the plan being played, installed by the engine.
+let custom = new Map<string, Technique>();
+export function setCustomTechniques(list: Technique[]): void {
+  custom = new Map(list.map(t => [t.id, t]));
+}
+
 export function getTechnique(id: string): Technique | undefined {
-  return byId.get(id);
+  return byId.get(id) ?? custom.get(id);
 }

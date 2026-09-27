@@ -80,12 +80,36 @@ export const MetaSchema = z.object({
   grain: z.number().min(0).max(0.2).default(0.07),
 });
 
+// Code-defined scenes ("invent" mode): a model writes the drawing and sound
+// code itself instead of choosing from the technique library. A section uses
+// one with technique "scene:<id>". The code runs in the page, against the
+// Stage API documented in docs/stage-api.md.
+export const SceneCodeSchema = z.object({
+  id: z.string().regex(/^[a-z][a-z0-9-]{0,31}$/, 'lowercase id like "light-leak"'),
+  title: z.string().max(60).default(''),
+  /** Body of function (g, t, S): draw one full frame at scene-local time t. */
+  draw: z.string().min(10).max(60_000),
+  /** Body of function (A, t0, S): schedule this scene's sound accents at absolute time t0. */
+  sfx: z.string().max(30_000).optional(),
+  /** Camera shake / zoom punch events, in beats from the scene start. */
+  hits: z.array(z.object({ beat: z.number().min(0).max(64), shake: z.number().min(0).max(40).default(10), punch: z.number().min(0).max(0.2).optional() })).max(32).default([]),
+});
+
+export const CustomSchema = z.object({
+  /** Body of function (S): runs once at load and returns an object of shared helpers, available as S.lib. */
+  lib: z.string().max(60_000).optional(),
+  scenes: z.array(SceneCodeSchema).max(24).default([]),
+  /** Body of function (A, M): schedules the whole soundtrack. Replaces the genre music bed. */
+  score: z.string().max(60_000).optional(),
+});
+
 export const PlanSchema = z.object({
   version: z.literal(1).default(1),
   meta: MetaSchema.prefault({}),
   brand: BrandSchema,
   music: MusicSchema.prefault({}),
   sections: z.array(SectionSchema).min(1).max(40),
+  custom: CustomSchema.optional(),
 });
 
 export type PlanInput = z.input<typeof PlanSchema>;
@@ -94,3 +118,5 @@ export type Section = Plan['sections'][number];
 export type Brand = Plan['brand'];
 export type Music = Plan['music'];
 export type TransitionType = (typeof TRANSITIONS)[number];
+export type Custom = z.output<typeof CustomSchema>;
+export type SceneCode = z.output<typeof SceneCodeSchema>;

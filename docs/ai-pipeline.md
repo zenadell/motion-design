@@ -111,3 +111,33 @@ motion make "file://$PWD/test/fixtures/site/index.html" --brief "Launch reel" --
 ```
 
 CI runs this on every push. The unit tests in `test/ai.test.ts` drive the planner with a scripted fake model.
+
+## Invent mode: the model designs and codes the whole film
+
+`motion make` chooses from the technique library, so every film shares its look. `motion invent` lets the model build something new: it designs a visual language and writes the drawing and sound code for every scene itself.
+
+```bash
+motion invent --brand out/brand.json --brief "Invent an entirely new visual language. Surprise us." --seconds 24 -o out/film
+```
+
+1. **Direction** (thinking: high). A concept, influences, palette roles (brand colours plus up to 3 extras), type, composition, texture, motion principles, an original score, and 4–9 scenes with their on-screen text. The prompt lists every idea earlier films used, so none of them come back.
+2. **Code.** A shared `lib` (helpers for a consistent look) and a `score` (the whole soundtrack, synthesised). Then every scene's `draw` and `sfx`, written in parallel against the [Stage API](../src/engine/custom/stage.ts) (`STAGE_DOCS`).
+3. **Test → fix.** The code runs in headless Chromium. The model gets the problems back and fixes them, up to 3 rounds:
+   - exceptions, with the scene, the time and the stack line;
+   - frames slower than 80 ms;
+   - scenes that draw nothing visible;
+   - numbers in on-screen strings that aren't in the brief or the facts.
+4. **Design review.** Two frames per scene go back to the model with the direction. It scores each scene and rewrites the ones it marks "revise", using its own frames and notes, then everything is re-tested.
+5. The film renders like any plan: motion blur, the synthesised score and the scene sound effects, MP4.
+
+Scene code is sandboxed:
+- no DOM, network, timers or clocks;
+- a seeded `Math.random`;
+- page requests are blocked while rendering.
+
+The code is stored in the plan (`custom.lib`, `custom.score`, `custom.scenes[]`), so a film can be re-rendered, inspected or edited like any other plan.
+
+**First live run** (Jomiez, 24 s, Gemini 3.8 Flash, one review round):
+- **What Gemini made:** "The Harmonic Blueprint", 6 scenes and about 45k characters of JavaScript.
+- **Test and review:** 2 automatic fix rounds, a review at 6/10, then 3 scenes rewritten.
+- **Cost and time:** 15 model calls, $0.70, 9 minutes, then the render.

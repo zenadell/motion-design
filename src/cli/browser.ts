@@ -38,6 +38,8 @@ export async function openReel(plan: Plan, browser?: Browser): Promise<Reel> {
   const errors: string[] = [];
   const open = async (): Promise<Page> => {
     const ctx = await b.newContext({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
+    // The reel is fully self-contained; model-written scene code gets no network.
+    await ctx.route(/^(https?|wss?):/, r => r.abort());
     const page = await ctx.newPage();
     page.on('pageerror', e => errors.push(e.message));
     page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });

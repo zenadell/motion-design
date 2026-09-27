@@ -27,6 +27,8 @@ AI director (needs GEMINI_API_KEY; model: gemini-3.8-flash, override with --mode
   motion make     <url> --brief "..." [--seconds 20] [--genre afro-house|electro] [--bpm 120]
                   [--logo mark.svg] [--brand brand.json] [--qa 1 | --no-qa] [--no-render] [-o dir]
                                                  website → brand kit → plan → visual review → MP4
+  motion invent   <url> | --brand brand.json --brief "..." [--seconds 24] [--bpm n] [--qa 1] [--no-render] [-o dir]
+                                                 the model designs a new look and writes every scene's code itself
   motion brand    <url> [--logo mark.svg] [-o brand.json]
                                                  extract colours, fonts, facts and the logo mark
   motion plan     --brand brand.json --brief "..." [--seconds 20] [--genre g] [--effort low|medium|high] [-o plan.json]

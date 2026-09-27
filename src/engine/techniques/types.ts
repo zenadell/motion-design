@@ -5,7 +5,7 @@ import type { G } from '../core/draw';
 import type { Theme } from '../core/theme';
 import type { BrandRT } from '../assets/logo';
 
-export type Category = 'intro' | 'type' | 'shape' | 'camera' | 'ui' | 'data' | 'brand' | 'outro';
+export type Category = 'intro' | 'type' | 'shape' | 'camera' | 'ui' | 'data' | 'brand' | 'outro' | 'custom';
 
 /** A camera-shake / zoom-punch event, in section-local seconds. */
 export interface Hit {

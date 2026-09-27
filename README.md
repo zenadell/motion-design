@@ -67,6 +67,7 @@ motion gallery  [-o dir] [--quick] [--only id,id]
 
 # AI director (GEMINI_API_KEY)
 motion make     <url> --brief "..." [--seconds 20] [--genre g] [--logo mark.svg] [--qa 1] [-o dir]
+motion invent   <url> | --brand brand.json --brief "..." [--seconds 24] [-o dir]   (the model designs + codes every scene)
 motion brand    <url> [-o brand.json]
 motion plan     --brand brand.json --brief "..." [--seconds 20] [-o plan.json]
 motion review   <plan.json> [--brand brand.json]

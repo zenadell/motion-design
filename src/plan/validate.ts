@@ -1,4 +1,5 @@
 import type { z } from 'zod';
+import { checkCustom } from '../engine/custom/stage';
 import { getTechnique, techniqueIds } from '../engine/techniques';
 import { PlanSchema, type Plan } from './schema';
 
@@ -40,8 +41,19 @@ export function validatePlan(input: unknown): ValidationResult {
   const plan = base.data;
   const errors: Issue[] = [];
   const ids = techniqueIds();
+  const sceneIds = new Set((plan.custom?.scenes ?? []).map(c => c.id));
+  plan.custom?.scenes.forEach((c, i) => {
+    if (plan.custom!.scenes.findIndex(o => o.id === c.id) !== i) errors.push({ path: `custom.scenes[${i}].id`, message: `duplicate scene id "${c.id}"` });
+  });
+  errors.push(...checkCustom(plan.custom));
   plan.sections.forEach((s, i) => {
     const at = `sections[${i}]`;
+    if (s.technique.startsWith('scene:')) {
+      const id = s.technique.slice(6);
+      if (!sceneIds.has(id)) errors.push({ path: `${at}.technique`, message: `no custom scene "${id}"; defined: ${[...sceneIds].join(', ') || '(none)'}` });
+      if (Math.abs(s.beats * 4 - Math.round(s.beats * 4)) > 1e-6) warnings.push({ path: `${at}.beats`, message: 'not on the 16th-note grid; cuts will drift off the beat' });
+      return;
+    }
     const t = getTechnique(s.technique);
     if (!t) {
       const hint = closest(s.technique, ids);
@@ -64,7 +76,7 @@ export function validatePlan(input: unknown): ValidationResult {
   const total = plan.sections.reduce((a, s) => a + s.beats, 0) * (60 / plan.music.bpm);
   if (total > 90) warnings.push({ path: 'sections', message: `total length ${total.toFixed(1)} s is long for a motion piece` });
   const last = getTechnique(plan.sections[plan.sections.length - 1].technique);
-  if (last && last.category !== 'outro') warnings.push({ path: `sections[${plan.sections.length - 1}]`, message: 'consider ending on an outro technique (end-card or signature-card)' });
+  if (last && last.category !== 'outro' && last.category !== 'custom') warnings.push({ path: `sections[${plan.sections.length - 1}]`, message: 'consider ending on an outro technique (end-card or signature-card)' });
   return errors.length ? { ok: false, errors, warnings } : { ok: true, plan, warnings };
 }
 

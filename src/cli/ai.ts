@@ -4,6 +4,7 @@ import { extractBrand } from '../ai/brand';
 import { loadBrandKit } from '../ai/brand-kit';
 import { Gemini, DEFAULT_MODEL, apiKey } from '../ai/gemini';
 import { summarizeUsage, type LLM, type Usage } from '../ai/llm';
+import { invent } from '../ai/invent';
 import { make } from '../ai/pipeline';
 import { Planner } from '../ai/planner';
 import { review } from '../ai/qa';
@@ -114,6 +115,27 @@ export async function runAi(cmd: string, pos: string[], flags: Flags): Promise<b
       } finally {
         await browser.close();
       }
+      return true;
+    }
+    case 'invent': {
+      const dir = out ?? 'out/invent';
+      const llm = gemini(flags);
+      let kit;
+      if (str(flags.brand)) kit = loadBrandKit(JSON.parse(readFileSync(str(flags.brand)!, 'utf8')));
+      else if (pos[0]) {
+        const b = await extractBrand(pos[0], llm, { logoFile: str(flags.logo), log });
+        kit = b.kit;
+        printUsage(b.usage);
+      } else throw new Error('missing <url> or --brand brand.json');
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, 'brand.json'), JSON.stringify(kit, null, 2));
+      const res = await invent(llm, {
+        kit, brief: readBrief(flags), seconds: num(flags.seconds), bpm: num(flags.bpm),
+        qaRounds: flags['no-qa'] ? 0 : num(flags.qa) ?? 1, render: !flags['no-render'], workers: num(flags.workers) ?? 3, outDir: dir, log,
+      });
+      printUsage(res.usage);
+      if (res.open.length) log(`! ${res.open.length} problem(s) the model did not fix:\n${res.open.map(p => `  ${p.split('\n')[0]}`).join('\n')}`);
+      console.log(`✓ ${res.video ?? join(dir, 'plan.json')} — "${res.direction.title}"`);
       return true;
     }
     case 'make': {

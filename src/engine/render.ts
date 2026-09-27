@@ -7,6 +7,8 @@ import { clamp, E, lerp, pad2, prog, pulse } from './core/math';
 import { font, setTheme } from './core/theme';
 import { makeTheme } from './core/theme-build';
 import { buildTimeline, sectionIndexAt } from './core/timeline';
+import { installCustom } from './custom/stage';
+import { setCustomTechniques } from './techniques';
 import type { Ctx } from './techniques/types';
 
 export interface SectionInfo {
@@ -26,6 +28,8 @@ export interface Engine {
   /** Draw frame at time t into `g` (the 1920×1080 output). sub > 1 = motion blur samples. */
   renderFrame(g: G, t: number, sub?: number): void;
   renderSoundtrack(sampleRate?: number): Promise<AudioBuffer>;
+  /** Errors thrown by section code (first per section and phase), for automated repair. */
+  errors: { where: string; message: string; stack?: string }[];
 }
 
 /** Reset drawing state but keep the current transform (screen shake). */
@@ -45,8 +49,18 @@ export function createEngine(plan: Plan): Engine {
   const theme = makeTheme(plan.brand);
   setTheme(theme);
   const brand = makeBrand(plan.brand);
+  const B0 = 60 / plan.music.bpm;
+  const music = makeMusic(plan.music, B0);
+  // Model-written scenes must be registered before the timeline resolves technique ids.
+  const custom = plan.custom
+    ? installCustom(plan.custom, { B: B0, start: 0, dur: 0, beats: 0, index: -1, fps: plan.meta.fps, theme, brand, music, captions: plan.meta.captions, energy: 0, bt: b => b * B0 })
+    : undefined;
+  setCustomTechniques(custom?.techniques ?? []);
+  const errors: Engine['errors'] = [...(custom?.errors ?? [])];
+  const report = (where: string, e: unknown) => {
+    if (!errors.some(x => x.where === where)) errors.push({ where, message: String((e as Error)?.message ?? e), stack: (e as Error)?.stack?.split('\n').slice(0, 4).join('\n') });
+  };
   const tl = buildTimeline(plan);
-  const music = makeMusic(plan.music, tl.B);
   const fps = plan.meta.fps, D = tl.duration, secs = tl.sections;
 
   const ctxs: Ctx[] = secs.map((s, i) => ({
@@ -62,6 +76,7 @@ export function createEngine(plan: Plan): Engine {
       return f();
     } catch (e) {
       console.error(`[motion] ${secs[i].technique.id} (section ${i}) failed:`, e);
+      report(`${secs[i].technique.id}#${i}:sound`, e);
       return fallback;
     }
   };
@@ -100,6 +115,7 @@ export function createEngine(plan: Plan): Engine {
       if (!erred.has(i)) {
         erred.add(i);
         console.error(`[motion] ${s.technique.id} (section ${i}) failed to draw:`, e);
+        report(`${s.technique.id}#${i}:draw@${(t - s.start).toFixed(2)}s`, e);
       }
       fillBg(g, theme.bg);
     }
@@ -251,8 +267,18 @@ export function createEngine(plan: Plan): Engine {
       else if (tr.type === 'wipe') S.whoosh(A, a, tr.dur, 0.28, -0.9, 0.9, 600, 5000);
       else if (tr.type === 'flash') { S.swell(A, a, s.end, 0.22); S.crash(A, s.end, 0.22, 1.4); S.sub(A, s.end, 0.6, 0.8); }
     }
-    const beds = secs.map((s, i) => call<[number, number]>(i, () => s.technique.bed?.(s.params as never, ctxs[i]) ?? [0, s.dur], [0, s.dur]));
-    scoreBed(A, tl, music, beds);
+    if (custom?.score) {
+      const M = { bpm: plan.music.bpm, beat: tl.B, duration: D, sections: secs.map(s => ({ id: s.technique.id.replace(/^scene:/, ''), start: s.start, end: s.end, beats: s.beats, energy: s.energy })) };
+      try {
+        custom.score(A, M);
+      } catch (e) {
+        console.error('[motion] custom score failed:', e);
+        report('custom.score', e);
+      }
+    } else {
+      const beds = secs.map((s, i) => call<[number, number]>(i, () => s.technique.bed?.(s.params as never, ctxs[i]) ?? [0, s.dur], [0, s.dur]));
+      scoreBed(A, tl, music, beds);
+    }
     sidechain(A);
     const v = 0.9 * plan.music.volume;
     A.out.gain.setValueAtTime(v, Math.max(0, D - 0.7));
@@ -267,6 +293,7 @@ export function createEngine(plan: Plan): Engine {
     sections: secs.map(s => ({ index: s.index, technique: s.technique.id, label: s.label, start: s.start, end: s.end, beats: s.beats })),
     renderFrame,
     renderSoundtrack,
+    errors,
   };
 }
 

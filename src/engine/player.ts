@@ -9,8 +9,11 @@ export interface ReelAPI {
   duration: number;
   fps: number;
   sections: Engine['sections'];
+  errors: Engine['errors'];
   frame(i: number, sub?: number): string;
   still(t: number, sub?: number): string;
+  /** Render the frame at `t` and report how long it took and how much is on screen (for automated QA). */
+  probe(t: number): { ms: number; mean: number; std: number };
   /** A scaled-down JPEG of the frame at `t` (for vision-model review). */
   thumb(t: number, width?: number, sub?: number): string;
   render(t: number, sub?: number): void;
@@ -165,8 +168,26 @@ export function startPlayer(engine: Engine): void {
     duration: D,
     fps: engine.fps,
     sections: engine.sections,
+    errors: engine.errors,
     frame(i, sub = 6) { engine.renderFrame(g, i / engine.fps, sub); return canvas.toDataURL('image/png'); },
     still(t, sub = 1) { engine.renderFrame(g, t, sub); return canvas.toDataURL('image/png'); },
+    probe(t) {
+      const t0 = performance.now();
+      engine.renderFrame(g, t, 1);
+      const ms = performance.now() - t0;
+      const c = document.createElement('canvas');
+      c.width = 96; c.height = 54;
+      const cg = c.getContext('2d', { willReadFrequently: true })!;
+      cg.drawImage(canvas, 0, 0, 96, 54);
+      const d = cg.getImageData(0, 0, 96, 54).data;
+      let sum = 0, sq = 0;
+      for (let i = 0; i < d.length; i += 4) {
+        const l = (0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]) / 255;
+        sum += l; sq += l * l;
+      }
+      const n = d.length / 4, mean = sum / n;
+      return { ms, mean, std: Math.sqrt(Math.max(0, sq / n - mean * mean)) };
+    },
     thumb(t, width = 960, sub = 1) {
       engine.renderFrame(g, t, sub);
       const c = document.createElement('canvas');

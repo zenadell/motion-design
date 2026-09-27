@@ -1,0 +1,17 @@
+{
+  "meta": { "title": "Stage test", "hud": false, "captions": false, "grain": 0.04 },
+  "brand": { "name": "Northwind", "colors": { "bg": "#0A0C14", "text": "#EEF1F8", "primary": "#3D5AFE" } },
+  "music": { "bpm": 120 },
+  "custom": {
+    "lib": "return { ring(g, x, y, r, w, col) { g.strokeStyle = col; g.lineWidth = w; g.beginPath(); g.arc(x, y, r, 0, S.TAU); g.stroke(); } };",
+    "scenes": [
+      { "id": "orbit", "title": "Orbit", "draw": "g.fillStyle = S.colors.bg; g.fillRect(0, 0, S.W, S.H); const p = S.ease.outExpo(S.prog(t, 0, S.b(1))); for (let i = 0; i < 24; i++) { const a = i / 24 * S.TAU + t; S.lib.ring(g, S.W / 2 + Math.cos(a) * 300 * p, S.H / 2 + Math.sin(a) * 300 * p, 20 + 30 * S.noise(i, t), 4, S.mix(S.colors.primary, S.colors.text, S.rnd(i))); } S.font(g, 120, 800); g.fillStyle = S.colors.text; g.textAlign = 'center'; g.fillText(S.brand.name.toUpperCase(), S.W / 2, S.H / 2 + 40);", "sfx": "A.riser(t0, t0 + S.b(2), 0.2); A.impact(t0 + S.b(2), 0.6);", "hits": [{ "beat": 2, "shake": 12 }] },
+      { "id": "mark", "draw": "g.fillStyle = S.colors.primary; g.fillRect(0, 0, S.W, S.H); S.logo(g, S.W / 2, S.H / 2, 300 * S.ease.outBack(S.prog(t, 0, S.b(1))), S.colors.bg);" }
+    ],
+    "score": "for (let b = 0; b < M.duration / M.beat; b++) { const at = b * M.beat; A.kick(at, 0.9); if (b % 2) A.clap(at, 0.3); A.hat(at + M.beat / 2, 0.08); if (b % 4 === 0) A.pad(at, at + 4 * M.beat, A.chord(['Am','F','C','G'][(b / 4) % 4]).pad, 0.025); }"
+  },
+  "sections": [
+    { "technique": "scene:orbit", "beats": 4, "transition": "wipe" },
+    { "technique": "scene:mark", "beats": 4 }
+  ]
+}
