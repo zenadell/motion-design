@@ -139,6 +139,12 @@ Roles can use different models: `--code-model gemini-3.1-pro-preview --critic-mo
 
 Scene code is sandboxed: no DOM, network, timers or clocks, and a seeded `Math.random`. Page requests are blocked while rendering.
 
+### Setting the bar, client feedback and refining
+
+- `--bar-video a.mp4,b.mp4 --bar-code a.html,b.html` sets the quality bar. The director and the critics **watch** the reference films. The coder **studies their source code** as 9/10 craft to learn from, not to copy. Both sit at the start of the prompts so Gemini's implicit cache can reuse them.
+- `--feedback "…"` or `--feedback @notes.txt` holds the client's notes on earlier versions (what they rejected, what they love). They reach the director, the concept judge, the coder and the critics.
+- `motion refine <dir> --scenes id,id [--rounds 3] [--feedback …]` reworks only some scenes of a finished film (watch → critique → rewrite) and re-renders it. The rest of the film is kept exactly.
+
 ## Replicate mode: rebuild a film you love
 
 ```bash
@@ -155,3 +161,7 @@ motion replicate reference.mp4 --brand out/brand.json --brief "Our launch film" 
 |---|---|---|---|
 | v1 | direct → code → one still-frame review | $0.70 | "The Harmonic Blueprint": thin lines on black, mostly empty; its own review 6/10 |
 | v2 | + toolkit, handbook, exemplar, video critique, 2 candidates, 2 rewrite rounds, film review | $1.85 | "Architecture of Intelligence": bold type on 3D slabs, motion-blur streaks, animated dashboards; film review 8/10, scene scores 4.6–6.4 |
+| v3 | + concept tournament, coverage and motion measurements | stopped (credits) | "Molten Silicon": scenes scored 3–5 before the account ran out |
+| v4 | + crafted presets, the two hand-made reels as the bar (videos and code), client feedback | $5.35 + $0.57 refine | "Kinetic Riso Press": huge editorial type, paper, flame-orange and ink alternating, split grids, a type iris, breakbeat score. Film review 9/10; scene scores 4.4–6.5. The ending (2.9) was refined to 4.7 with `motion refine` |
+
+The cost column is an upper bound: it prices every input token at the full rate, but repeated prompt prefixes (the bar films and code) are billed at Gemini's cached-token rate.

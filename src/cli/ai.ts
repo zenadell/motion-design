@@ -4,6 +4,7 @@ import { extractBrand } from '../ai/brand';
 import { loadBrandKit } from '../ai/brand-kit';
 import { Gemini, DEFAULT_MODEL, apiKey } from '../ai/gemini';
 import { summarizeUsage, type LLM, type Usage } from '../ai/llm';
+import { loadBar } from '../ai/bar';
 import { invent } from '../ai/invent';
 import { replicate } from '../ai/replicate';
 import { make } from '../ai/pipeline';
@@ -131,7 +132,11 @@ export async function runAi(cmd: string, pos: string[], flags: Flags): Promise<b
       mkdirSync(dir, { recursive: true });
       writeFileSync(join(dir, 'brand.json'), JSON.stringify(kit, null, 2));
       const sub = (flag: string) => (str(flags[flag]) ? new Gemini({ model: str(flags[flag]), log }) : undefined);
+      const list = (flag: string) => (str(flags[flag]) ?? '').split(',').map(x => x.trim()).filter(Boolean);
+      const bar = list('bar-video').length || list('bar-code').length ? await loadBar(list('bar-video'), list('bar-code')) : undefined;
+      if (bar) log(`  quality bar: ${bar.videos.length} film(s), ${Math.round((bar.code?.length ?? 0) / 1000)}k chars of reference code`);
       const res = await invent(llm, {
+        bar, feedback: str(flags.feedback)?.startsWith('@') ? readFileSync(str(flags.feedback)!.slice(1), 'utf8') : str(flags.feedback),
         kit, brief: readBrief(flags), seconds: num(flags.seconds), bpm: num(flags.bpm),
         candidates: num(flags.candidates), rounds: num(flags.rounds), filmRounds: flags['no-qa'] ? 0 : num(flags['film-rounds']),
         budget: num(flags.budget), target: num(flags.target), render: !flags['no-render'], workers: num(flags.workers) ?? 3, outDir: dir, log,
@@ -140,6 +145,34 @@ export async function runAi(cmd: string, pos: string[], flags: Flags): Promise<b
       printUsage(res.usage);
       log(`  scene scores: ${res.scores.join(' · ')}${res.films.length ? ` · film ${res.films.map(f => f.score).join(' → ')}/10` : ''}`);
       console.log(`✓ ${res.video ?? join(dir, 'plan.json')} — "${res.direction.title}"`);
+      return true;
+    }
+    case 'refine': {
+      const src = pos[0];
+      if (!src) throw new Error('missing <invent output dir>');
+      const only = (str(flags.scenes) ?? '').split(',').map(x => x.trim()).filter(Boolean);
+      if (!only.length) throw new Error('missing --scenes id1,id2');
+      const read = (n: string) => JSON.parse(readFileSync(join(src, n), 'utf8'));
+      const v = validatePlan(read('plan.json'));
+      if (!v.ok) throw new Error(`invalid plan in ${src}:\n${formatIssues(v.errors)}`);
+      const direction = read('direction.json');
+      const unknown = only.filter(id => !direction.scenes.some((s: { id: string }) => s.id === id));
+      if (unknown.length) throw new Error(`unknown scene id(s): ${unknown.join(', ')}; scenes: ${direction.scenes.map((s: { id: string }) => s.id).join(', ')}`);
+      const dir = out ?? `${src.replace(/\/$/, '')}-refined`;
+      const llm = gemini(flags);
+      const list = (flag: string) => (str(flags[flag]) ?? '').split(',').map(x => x.trim()).filter(Boolean);
+      const bar = list('bar-video').length || list('bar-code').length ? await loadBar(list('bar-video'), list('bar-code')) : undefined;
+      const seconds = v.plan.sections.reduce((a, x) => a + x.beats, 0) * (60 / v.plan.music.bpm);
+      const res = await invent(llm, {
+        kit: loadBrandKit(read('brand.json')), brief: readBrief(flags), direction, resume: { plan: v.plan, only }, seconds, bpm: v.plan.music.bpm,
+        bar, feedback: str(flags.feedback)?.startsWith('@') ? readFileSync(str(flags.feedback)!.slice(1), 'utf8') : str(flags.feedback),
+        rounds: num(flags.rounds) ?? 3, filmRounds: num(flags['film-rounds']) ?? 0, budget: num(flags.budget), target: num(flags.target),
+        render: !flags['no-render'], workers: num(flags.workers) ?? 3, outDir: dir, log,
+      });
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, 'brand.json'), readFileSync(join(src, 'brand.json')));
+      printUsage(res.usage);
+      console.log(`✓ ${res.video ?? join(dir, 'plan.json')} — refined ${only.join(', ')}`);
       return true;
     }
     case 'replicate': {

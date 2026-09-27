@@ -30,8 +30,12 @@ AI director (needs GEMINI_API_KEY; model: gemini-3.8-flash, override with --mode
   motion invent   <url> | --brand brand.json --brief "..." [--seconds 24] [--bpm n] [-o dir]
                   [--candidates 2] [--rounds 2] [--film-rounds 1] [--target 9] [--budget 6]
                   [--code-model id] [--critic-model id] [--no-render]
+                  [--bar-video a.mp4,b.mp4] [--bar-code a.html,b.html]   reference films that set the quality bar
+                  [--feedback "..." | @file]                           the client's notes on earlier versions
                                                  the model designs a new look, writes every scene's code, watches
                                                  its renders and rewrites until the critic's score stops improving
+  motion refine   <invent-dir> --scenes id,id [--rounds 3] [--feedback "..."] [--bar-video …] [-o dir]
+                                                 rework only some scenes of a finished film (watch → critique → rewrite)
   motion replicate <reference.mp4> --brand brand.json [--brief "..."] [--keep-colors] [same flags as invent]
                                                  watch a film you like and rebuild it, shot for shot, for the brand
   motion brand    <url> [--logo mark.svg] [-o brand.json]
@@ -47,7 +51,7 @@ AI director (needs GEMINI_API_KEY; model: gemini-3.8-flash, override with --mode
   --brief accepts @file.txt · --replay replies.json plays back recorded model replies (tests, no key)
 `;
 
-const VALUE_FLAGS = ['at', 'crf', 'workers', 'blur', 'from', 'to', 'only', 'brand', 'brief', 'seconds', 'bpm', 'genre', 'model', 'logo', 'effort', 'qa', 'mark', 'replay', 'candidates', 'rounds', 'film-rounds', 'budget', 'target', 'code-model', 'critic-model'];
+const VALUE_FLAGS = ['at', 'crf', 'workers', 'blur', 'from', 'to', 'only', 'brand', 'brief', 'seconds', 'bpm', 'genre', 'model', 'logo', 'effort', 'qa', 'mark', 'replay', 'candidates', 'rounds', 'film-rounds', 'budget', 'target', 'code-model', 'critic-model', 'bar-video', 'bar-code', 'feedback', 'scenes'];
 
 function parse(argv: string[]) {
   const pos: string[] = [], flags: Record<string, string | true> = {};

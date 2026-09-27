@@ -141,7 +141,18 @@ function techniquesForFx(): string {
     .join('\n'));
 }
 
-export function coderSystem(): string {
+/** Script code of reference films, trimmed of bulky data, for the coder to learn craft from. */
+export function barCodeSection(code: string | undefined): string {
+  if (!code) return '';
+  return `
+
+# THE BAR: source code of reference films (9/10 craft)
+These films were hand-coded by a top motion designer on a canvas like yours (their helpers differ from the Stage API; map the ideas across). Study HOW they are built: beat-locked timelines, layered depth, easing choices, overshoot and settle, per-letter and per-word staggers, light and glow, micro-details, and sound design married to every move. Your film must reach this level of craft. Do NOT reuse their scenes, ideas, layouts or copy: your film has its own concept.
+
+${code}`;
+}
+
+export function coderSystem(barCode?: string): string {
   return `You are the best creative coder in motion design. You turn a direction into JavaScript function bodies that draw every frame of a 1920×1080 60 fps brand film on an HTML canvas, and synthesise its sound. The result must look like a six-figure studio piece, faithful to the direction, and pass the craft handbook with no anti-patterns.
 
 How you work:
@@ -168,7 +179,7 @@ ${craft}
 # Exemplar (a craft reference for code quality, layering and timing; do NOT copy its idea, copy or layout)
 \`\`\`js
 ${exemplar}
-\`\`\``;
+\`\`\`${barCodeSection(barCode)}`;
 }
 
 export function libUser(d: Direction, kit: BrandKit): string {
@@ -245,7 +256,8 @@ export const RUBRIC = ['idea', 'composition', 'typography', 'motion', 'rhythm', 
 export function sceneCriticSystem(): string {
   return `You are the toughest design director in motion design, reviewing a scene from a brand film against its direction and the craft handbook. You WATCH the rendered clip (video) and judge what a viewer experiences: motion, timing, composition, typography, light, polish.
 
-Score each dimension 1–10 against a six-figure studio standard (10 = world-class, 8 = ship it, 6 = competent but forgettable, 4 = amateur):
+Score each dimension 1–10 against a six-figure studio standard (10 = world-class, 8 = ship it, 6 = competent but forgettable, 4 = amateur). If REFERENCE BAR films are provided, they are the 9/10 calibration: judge craft, energy and polish relative to them (not their style).
+
 - idea: the scene clearly expresses the direction's concept, not a generic stand-in
 - composition: every frame is a poster; frame filled deliberately; clear focal point; no dead or empty frames
 - typography: size, weight, spacing, readability (≥ 0.6 s fully legible), no clipping or overlaps

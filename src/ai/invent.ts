@@ -50,8 +50,14 @@ export interface InventOptions {
   /** Separate models for writing code and for critiquing (default: the main model). */
   codeLLM?: LLM;
   criticLLM?: LLM;
+  /** Refine an existing film: keep its code and rework only the listed scene ids (needs `direction`). */
+  resume?: { plan: Plan; only: string[] };
   /** Skip the director: use this direction (replicate mode). */
   direction?: Direction;
+  /** The client's feedback on earlier versions; the director, the concept judge and the critics must respect it. */
+  feedback?: string;
+  /** Reference films that define the quality bar: videos (shown to director and critics) and their source code (shown to the coder). */
+  bar?: { videos: Buffer[]; code?: string };
   /** Extra context for every scene prompt and critique (replicate mode: the reference breakdown). */
   reference?: { note: string; clips?: Buffer[] };
 }
@@ -121,6 +127,13 @@ export async function invent(llm: LLM, o: InventOptions) {
   const t0 = Date.now();
   const fixRounds = o.fixRounds ?? 3, conc = o.concurrency ?? 3, budget = o.budget ?? 6, target = o.target ?? 9;
   const spent = () => summarizeUsage(usage).usd ?? 0;
+  const coder = () => coderSystem(o.bar?.code);
+  const feedbackNote = o.feedback ? `\n\nCLIENT FEEDBACK ON EARLIER VERSIONS (must be respected):\n${o.feedback}` : '';
+  /** The reference films, first in the prompt so Gemini's implicit cache can reuse them across calls. */
+  const barParts = (fps: number): Part[] =>
+    o.bar?.videos.length
+      ? [text('REFERENCE BAR: films by a top motion designer (9/10 craft). Watch them closely: this is the level of energy, rhythm, density and polish to reach and surpass. Your film must be as good and completely different in idea and look.'), ...o.bar.videos.map(v => video(v, fps))]
+      : [];
   const overBudget = () => spent() > budget;
 
   const ask = async <T>(m: LLM, label: string, system: string, parts: (Part | string)[], schema: object, effort: Effort): Promise<T> => {
@@ -137,13 +150,13 @@ export async function invent(llm: LLM, o: InventOptions) {
   if (o.direction) d = o.direction;
   else {
     log('1/6 direction: concept tournament');
-    const base = directorUser(o.brief, o.kit, Math.round((seconds * (o.bpm ?? 120)) / 60), seconds, o.bpm);
-    const { concepts } = await ask<{ concepts: Concept[] }>(llm, 'concepts', directorSystem(), [conceptsUser(base, 3)], conceptsSchema(), 'high');
+    const base = directorUser(o.brief, o.kit, Math.round((seconds * (o.bpm ?? 120)) / 60), seconds, o.bpm) + feedbackNote;
+    const { concepts } = await ask<{ concepts: Concept[] }>(llm, 'concepts', directorSystem(), [...barParts(3), conceptsUser(base, 3)], conceptsSchema(), 'high');
     concepts.forEach((c, k) => log(`  ${k + 1}. "${c.title}" — ${c.idea.slice(0, 160)}`));
-    const pick = await ask<{ ranking: number[]; reasons: string }>(criticLLM, 'pick concept', pickSystem(), [`BRIEF AND BRAND\n${base}`, `CONCEPTS\n${JSON.stringify(concepts.map((c, k) => ({ index: k, ...c })), null, 1)}`], pickSchema(), 'medium');
+    const pick = await ask<{ ranking: number[]; reasons: string }>(criticLLM, 'pick concept', pickSystem(), [...barParts(2), `BRIEF AND BRAND\n${base}`, `CONCEPTS\n${JSON.stringify(concepts.map((c, k) => ({ index: k, ...c })), null, 1)}`], pickSchema(), 'medium');
     const chosen = concepts[pick.ranking?.find(k => concepts[k]) ?? 0] ?? concepts[0];
     log(`  picked "${chosen.title}": ${pick.reasons.slice(0, 200)}`);
-    d = await ask<Direction>(llm, 'direct', directorSystem(), [developUser(base, chosen)], directionSchema(), 'high');
+    d = await ask<Direction>(llm, 'direct', directorSystem(), [...barParts(3), developUser(base, chosen)], directionSchema(), 'high');
   }
   const bpm = Math.min(140, Math.max(90, o.bpm ?? d.sound?.bpm ?? 120));
   const targetBeats = Math.round(((seconds * bpm) / 60) * 2) / 2;
@@ -159,7 +172,7 @@ export async function invent(llm: LLM, o: InventOptions) {
   writeFileSync(f('direction.json'), JSON.stringify(d, null, 2));
   log(`  "${d.title}" — ${d.concept}`);
   log(`  ${d.scenes.length} scenes · ${bpm} BPM · ${d.look.display}${d.look.serif ? ` + ${d.look.serif}` : ''} · ${d.vibe.join(', ')}`);
-  const refNote = o.reference ? `\n\nREFERENCE FILM BREAKDOWN (match its craft, pacing and style)\n${o.reference.note}` : '';
+  const refNote = (o.reference ? `\n\nREFERENCE FILM BREAKDOWN (match its craft, pacing and style)\n${o.reference.note}` : '') + feedbackNote;
 
   const corpus = factCorpus(o.kit, o.brief);
   const allowed = [String(bpm), String(new Date().getFullYear())];
@@ -235,15 +248,26 @@ export async function invent(llm: LLM, o: InventOptions) {
     };
 
     // ── 2. lib + score, tested on a probe scene ────────────────────────────
-    log('2/6 code: shared lib + score');
-    ({ lib, score } = await ask<{ lib: string; score: string }>(codeLLM, 'code lib', coderSystem(), [libUser(d, o.kit) + refNote], libSchema(), 'high'));
     const probe: SceneCode = { draw: 'g.fillStyle = S.colors.bg; g.fillRect(0, 0, S.W, S.H); g.fillStyle = S.colors.text; g.fillRect(900, 500, 120, 80);', sfx: '', hits: [] };
-    for (let r = 1; r <= fixRounds; r++) {
+    if (o.resume) {
+      const c = o.resume.plan.custom;
+      lib = c?.lib ?? '';
+      score = c?.score ?? '';
+      d.scenes.forEach((s, i) => {
+        const code = c?.scenes.find(x => x.id === s.id);
+        if (code) scenes[i] = { draw: code.draw, sfx: code.sfx ?? '', hits: code.hits };
+      });
+      log(`2/6 refining ${o.resume.only.join(', ')}; keeping everything else`);
+    } else {
+      log('2/6 code: shared lib + score');
+      ({ lib, score } = await ask<{ lib: string; score: string }>(codeLLM, 'code lib', coder(), [libUser(d, o.kit) + refNote], libSchema(), 'high'));
+    }
+    for (let r = 1; r <= (o.resume ? 0 : fixRounds); r++) {
       const res = await run(scenePlan(0, probe, true), []);
       const libProblems = res.problems.filter(p => /^custom\.(lib|score)|^lib |^score |soundtrack/.test(p));
       if (!libProblems.length) break;
       log(`  lib/score: ${libProblems.length} problem(s) → fix ${r}`);
-      ({ lib, score } = await ask<{ lib: string; score: string }>(codeLLM, `fix lib · ${r}`, coderSystem(), [fixUser('the shared lib and the score', { lib, score }, libProblems)], libSchema(), 'medium'));
+      ({ lib, score } = await ask<{ lib: string; score: string }>(codeLLM, `fix lib · ${r}`, coder(), [fixUser('the shared lib and the score', { lib, score }, libProblems)], libSchema(), 'medium'));
     }
 
     // ── per-scene: write → test/fix → watch → score, best of N, then rewrite rounds ──
@@ -252,7 +276,7 @@ export async function invent(llm: LLM, o: InventOptions) {
         const res = await run(scenePlan(i, c), [c.draw]);
         if (!res.problems.length) return c;
         if (r === fixRounds) { log(`    ${d.scenes[i].id} ${tag}: still ${res.problems.length} problem(s), discarded`); return null; }
-        const fixed = await ask<SceneCode>(codeLLM, `fix scene ${d.scenes[i].id} ${tag} · ${r + 1}`, coderSystem(), [
+        const fixed = await ask<SceneCode>(codeLLM, `fix scene ${d.scenes[i].id} ${tag} · ${r + 1}`, coder(), [
           `SCENE "${d.scenes[i].id}": ${d.scenes[i].idea}\nOn-screen text: ${JSON.stringify(d.scenes[i].onscreenText)}\nLength: ${d.scenes[i].beats} beats at ${bpm} BPM.\n\nSHARED LIB (S.lib)\n\`\`\`js\n${lib}\n\`\`\``,
           fixUser(`scene "${d.scenes[i].id}"`, { draw: c.draw, sfx: c.sfx, hits: JSON.stringify(c.hits) }, res.problems),
         ], sceneSchema(), 'medium');
@@ -279,6 +303,7 @@ export async function invent(llm: LLM, o: InventOptions) {
     const critique = async (i: number, cm: { clip: Buffer; m: MotionReport }, tag: string) => {
       const refClip = o.reference?.clips?.[i];
       const c = await ask<SceneCritique>(criticLLM, `critique ${d.scenes[i].id} ${tag}`, sceneCriticSystem(), [
+        ...barParts(3),
         sceneCriticUser(d, i) + refNote,
         ...(refClip ? [text('REFERENCE SEGMENT (the target to match):'), video(refClip, 12)] : []),
         text('RENDERED SCENE:'), video(cm.clip, 12),
@@ -291,11 +316,19 @@ export async function invent(llm: LLM, o: InventOptions) {
 
     const history: Record<string, { step: string; score: number }[]> = {};
     const best: { code: SceneCode; score: number; critique: SceneCritique; clip: Buffer }[] = new Array(d.scenes.length);
-    log(`3/6 scenes: ${o.candidates ?? 2} candidates each, then up to ${o.rounds ?? 2} watch → rewrite rounds`);
-    await pool(d.scenes, conc, async (s, i) => {
+    log(`3/6 scenes: ${o.resume ? 'the current version' : `${o.candidates ?? 2} candidates`} each, then up to ${o.rounds ?? 2} watch → rewrite rounds`);
+    const todo = o.resume ? d.scenes.filter(s => o.resume!.only.includes(s.id)) : d.scenes;
+    await pool(todo, conc, async s => {
+      const i = d.scenes.indexOf(s);
       history[s.id] = [];
-      const cands = await Promise.all(Array.from({ length: o.candidates ?? 2 }, async (_, k) => {
-        const r = await ask<SceneCode>(codeLLM, `code ${s.id} #${k + 1}`, coderSystem(), [sceneUser(d, lib, i, bpm) + refNote + (k ? `\n\n(Candidate ${k + 1}: take a clearly different creative approach to the same brief.)` : '')], sceneSchema(), 'high');
+      const cands = o.resume
+        ? [await (async () => {
+            const cr = await critique(i, await clipOf(i, scenePlan(i, scenes[i])), 'current');
+            history[s.id].push({ step: 'current', score: cr.s });
+            return { code: scenes[i], score: cr.s, critique: cr.c, clip: cr.clip };
+          })()]
+        : await Promise.all(Array.from({ length: o.candidates ?? 2 }, async (_, k) => {
+        const r = await ask<SceneCode>(codeLLM, `code ${s.id} #${k + 1}`, coder(), [sceneUser(d, lib, i, bpm) + refNote + (k ? `\n\n(Candidate ${k + 1}: take a clearly different creative approach to the same brief.)` : '')], sceneSchema(), 'high');
         const ok = await testFix(i, cleanScene(r), `#${k + 1}`);
         if (!ok) return null;
         const cr = await critique(i, await clipOf(i, scenePlan(i, ok)), `#${k + 1}`);
@@ -307,7 +340,7 @@ export async function invent(llm: LLM, o: InventOptions) {
       let cur = good[0];
       log(`  ${s.id}: candidates ${good.map(g => g.score).join(' / ')} → kept ${cur.score}`);
       for (let r = 1; r <= (o.rounds ?? 2) && cur.score < target && !overBudget(); r++) {
-        const rw = await ask<SceneCode>(codeLLM, `rewrite ${s.id} · ${r}`, coderSystem(), [
+        const rw = await ask<SceneCode>(codeLLM, `rewrite ${s.id} · ${r}`, coder(), [
           rewriteUser(d, lib, i, bpm, cur.code, cur.critique, cur.score) + refNote,
           text('THE CLIP THE REVIEW IS ABOUT:'), video(cur.clip, 12),
         ], sceneSchema(), 'high');
@@ -334,7 +367,7 @@ export async function invent(llm: LLM, o: InventOptions) {
         log(`  film: ${res.problems.length} problem(s): ${res.problems.slice(0, 2).join(' | ').slice(0, 200)}`);
         if (r === fixRounds) break;
         const libP = res.problems.filter(p => /lib|score|soundtrack/.test(p));
-        if (libP.length) ({ lib, score } = await ask<{ lib: string; score: string }>(codeLLM, `fix lib (film) · ${r + 1}`, coderSystem(), [fixUser('the shared lib and the score', { lib, score }, libP)], libSchema(), 'medium'));
+        if (libP.length) ({ lib, score } = await ask<{ lib: string; score: string }>(codeLLM, `fix lib (film) · ${r + 1}`, coder(), [fixUser('the shared lib and the score', { lib, score }, libP)], libSchema(), 'medium'));
         for (const [i, s] of d.scenes.entries()) {
           const mine = res.problems.filter(p => p.includes(`scene:${s.id}`));
           if (mine.length) scenes[i] = (await testFix(i, scenes[i], 'film')) ?? scenes[i];
@@ -353,6 +386,7 @@ export async function invent(llm: LLM, o: InventOptions) {
       await reel.page.context().close();
       writeFileSync(f(`review-${r}.mp4`), filmClip);
       const fc = await ask<FilmCritique>(criticLLM, `film review ${r}`, filmCriticSystem(), [
+        ...barParts(3),
         `DIRECTION\n${JSON.stringify(d, null, 1)}${refNote}`,
         text('THE FILM:'), video(filmClip, 8), 'Review it.',
       ], filmCriticSchema(), 'medium');
@@ -367,7 +401,7 @@ export async function invent(llm: LLM, o: InventOptions) {
         if (i < 0 || !best[i]) return;
         const cur = best[i];
         const crit: SceneCritique = { ...cur.critique, fixes: [`(from the whole-film review) ${w.fix}`, ...cur.critique.fixes].slice(0, 4) };
-        const rw = await ask<SceneCode>(codeLLM, `film fix ${w.id} · ${r}`, coderSystem(), [
+        const rw = await ask<SceneCode>(codeLLM, `film fix ${w.id} · ${r}`, coder(), [
           rewriteUser(d, lib, i, bpm, cur.code, crit, cur.score) + refNote,
           text('THE CLIP THE REVIEW IS ABOUT:'), video(cur.clip, 12),
         ], sceneSchema(), 'high');
