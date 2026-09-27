@@ -16,7 +16,7 @@ export interface PlanOptions {
   effort?: Effort;
   /** Repair rounds after the first draft (validation + lint feedback). */
   maxRepairs?: number;
-  /** Use the per-technique response schema (falls back automatically if the API rejects it). */
+  /** Use the per-technique response schema (falls back to free-form JSON if the API rejects it). */
   strict?: boolean;
   log?: (s: string) => void;
 }
@@ -73,7 +73,7 @@ export class Planner {
   constructor(private llm: LLM, private o: PlanOptions) {
     this.target = targetOf(o);
     this.corpus = factCorpus(o.kit, o.brief);
-    this.schema = o.strict === false ? undefined : plannerSchema(true);
+    this.schema = o.strict === false ? undefined : plannerSchema();
     this.log = o.log ?? (() => {});
   }
 
@@ -96,9 +96,8 @@ export class Planner {
         return r.text;
       } catch (e) {
         if (!(e instanceof LLMError && e.schemaRejected && this.schema)) throw e;
-        const strict = (this.schema as { properties: { sections: { items: { anyOf?: unknown } } } }).properties.sections.items.anyOf;
-        this.schema = strict ? plannerSchema(false) : undefined;
-        this.log(`  schema rejected (${e.message.slice(0, 120)}); retrying with a ${this.schema ? 'simpler schema' : 'free-form JSON reply'}`);
+        this.schema = undefined;
+        this.log(`  schema rejected (${e.message.slice(0, 120)}); continuing with free-form JSON`);
       }
     }
   }

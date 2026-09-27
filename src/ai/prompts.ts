@@ -1,6 +1,6 @@
 import guide from '../../docs/authoring-guide.md?raw';
 import jomiez from '../../examples/jomiez.plan.json';
-import { catalogMarkdown } from '../cli/catalog';
+import { catalogJson, catalogMarkdown } from '../cli/catalog';
 import type { Issue } from '../plan/validate';
 import type { BrandKit } from './brand-kit';
 
@@ -85,7 +85,7 @@ Rules:
 - colors (all #RRGGBB):
   - bg: the background for a dark, cinematic video. Use the site's own background if it is dark. If the site is light, use a very dark near-black tinted toward the primary colour.
   - text: a near-white that reads on bg.
-  - primary: the brand's hero colour (buttons, logo, accents), not grey and not the background.
+  - primary: the brand's hero colour (buttons, logo, accents), not grey and not the background. If the site defines CSS custom properties with names like "primary" or "brand", those are the designer's own choices: use them for primary and secondary unless the screenshot clearly contradicts them.
   - secondary and accent: optional supporting colours actually used by the brand; omit them if unsure.
   - light / dark: optional paper and ink colours if the brand uses a distinctive light background.
 - fonts: pick the closest match for the site's heading font. display is one of: ${fonts.display.join(', ')}. serif (optional, only if the brand uses a serif) is one of: ${fonts.serif.join(', ')}.
@@ -107,5 +107,21 @@ Judge what a viewer sees. Look for:
 
 Do NOT flag: mid-animation frames (motion blur, letters still assembling, scenes transitioning), the small mono captions and HUD, or intentional stylistic choices (outline text, glitch, chromatic splits).
 
-Score 1–10 (8+ is ready to ship). For each real problem give the section index, severity ("high" must fix, "medium" should fix, "low" optional) and a concrete fix in terms of the plan: which param or technique to change and to what.`;
+Score 1–10 (8+ is ready to ship). For each real problem give the section index, severity ("high" must fix, "medium" should fix, "low" optional) and a concrete fix in terms of the plan.
+
+A fix must be something the plan can express: a change to a listed param of that section's technique (see TECHNIQUE PARAMS), its beats, energy or transition, or swapping, removing or reordering sections. The engine owns typography, colours and layout inside a technique, so never ask for a bigger font, a different text colour or a layout tweak the params can't express; if such a detail bothers you, either suggest a different technique or leave it out.`;
+}
+
+/** Param names and allowed values of the techniques a plan uses, for the critic. */
+export function paramsDigest(techniques: string[]): string {
+  const cat = catalogJson();
+  return [...new Set(techniques)]
+    .map(id => {
+      const t = cat.techniques.find(x => x.id === id);
+      if (!t) return '';
+      const props = Object.entries((t.params as { properties?: Record<string, { enum?: unknown[]; type?: unknown }> }).properties ?? {});
+      return `- ${id} (beats ${t.beats.min}–${t.beats.max}): ${props.length ? props.map(([k, v]) => (v.enum ? `${k} ∈ ${v.enum.map(e => JSON.stringify(e)).join('|')}` : k)).join(', ') : 'no params'}`;
+    })
+    .filter(Boolean)
+    .join('\n');
 }

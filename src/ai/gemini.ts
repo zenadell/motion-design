@@ -76,7 +76,8 @@ export class Gemini implements LLM {
           this.log(`  ${req.label}: ${this.model} does not take a thinking level; retrying without it`);
           continue;
         }
-        if (status === 400 && req.schema && /schema|response_?json_?schema|too (many|complex)|nesting/i.test(msg))
+        // Gemini reports an over-complex schema either explicitly or as a bare INVALID_ARGUMENT
+        if (status === 400 && req.schema && /schema|too (many|complex)|nesting|states|invalid argument/i.test(msg))
           throw new LLMError(`Gemini rejected the response schema: ${msg}`, status, true);
         const transient = status === undefined ? !(e instanceof LLMError) || /no text/.test(msg) : status === 429 || status >= 500;
         if (!transient || attempt >= this.retries) throw e instanceof LLMError ? e : new LLMError(`Gemini ${status ?? ''} ${msg}`.trim(), status);

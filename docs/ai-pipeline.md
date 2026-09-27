@@ -48,7 +48,17 @@ motion render out/plan.json -o out/video.mp4
 
 ## Why Gemini 3.8 Flash
 
-As of September 2026 it is Google's newest Flash model (released 2 September 2026). It takes images, which the brand and review steps need, and it supports structured output with a JSON Schema and a thinking level. At the introductory price of $0.75 per 1M input tokens and $3.75 per 1M output tokens (until 31 December 2026, then $1.50 / $7.50), a full `make` run is a few cents to a few tens of cents. `report.json` shows the real figure for each run.
+As of September 2026 it is Google's newest Flash model (released 2 September 2026). It takes images, which the brand and review steps need, and it supports structured output with a JSON Schema and a thinking level. The price is $0.75 per 1M input tokens and $3.75 per 1M output tokens (introductory, until 31 December 2026; then $1.50 / $7.50).
+
+In the first live run (Jomiez, 20 s, one review round), the model calls cost **$0.08**:
+
+| step | input tokens | output + thinking tokens | cost |
+|---|---:|---:|---:|
+| plan | 10.6k | 5.4k | $0.028 |
+| review (15 frames) | 18.0k | 0.2k | $0.014 |
+| revise | 12.0k | 7.8k | $0.038 |
+
+Brand extraction adds roughly a cent. `report.json` shows the real figure for every run.
 
 - **Gemini 3.7 Flash** is the same price and uses fewer tokens, with slightly weaker planning. Use `--model gemini-3.7-flash` if cost matters more than polish.
 - **Gemini 4** was announced but not released at the time of writing. When it ships, try it with `--model`; nothing else changes.
@@ -58,7 +68,9 @@ As of September 2026 it is Google's newest Flash model (released 2 September 202
 The model writes very little. The engine owns every pixel and every sound, so the model only chooses techniques, copy and timing. Guardrails:
 
 1. **The brand is injected, not generated.** The planner never sees or writes colours, fonts or the logo. It gets them as context, and the pipeline merges them into the plan.
-2. **Structured output.** The response schema has one branch per technique, so params are typed by the technique the model picks (`src/ai/schema.ts`). If the API rejects the schema, the planner falls back to a simpler one, then to free-form JSON. The validator is the real gate either way.
+2. **Structured output.** The response schema has one branch per technique, so params are typed by the technique the model picks (`src/ai/schema.ts`).
+   - Array bounds (`minItems` on the sections list, and every `maxItems`) are kept out of the schema and moved into descriptions. Gemini counts each bounded position as schema states, and with 22 branches the bounds exceed its limit (a bare `400 INVALID_ARGUMENT`).
+   - If the API still rejects the schema, the planner continues with free-form JSON. The validator is the real gate either way.
 3. **Validate → repair.** Every draft goes through `validatePlan`. Errors come back to the model with exact paths and "did you mean" hints, up to three rounds.
 4. **Lint** (`src/ai/lint.ts`) enforces what a schema can't:
    - **Length:** small differences are fixed in code by resizing flexible sections. Big ones go back to the model.

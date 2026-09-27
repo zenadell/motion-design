@@ -3,7 +3,7 @@ import { dataUrlToBuffer, openReel, type SectionInfo } from '../cli/browser';
 import type { Plan } from '../plan/schema';
 import type { BrandKit } from './brand-kit';
 import { image, parseJson, text, user, type LLM, type Part } from './llm';
-import { criticSystem } from './prompts';
+import { criticSystem, paramsDigest } from './prompts';
 
 // Visual QA: render settled frames of every section, show them to a vision
 // model with the plan, get back concrete problems phrased as plan edits.
@@ -28,7 +28,7 @@ export const critiqueSchema = () => ({
     summary: { type: 'string', description: 'One or two sentences on the draft as a whole' },
     issues: {
       type: 'array',
-      maxItems: 12,
+      description: 'at most 12, most important first',
       items: {
         type: 'object',
         properties: {
@@ -60,6 +60,7 @@ export function reviewPrompt(plan: Plan, kit: BrandKit, frames: { t: number; ind
   const parts: Part[] = [
     text(`PLAN\n${JSON.stringify(slim)}`),
     text(`BRAND FACTS\n${JSON.stringify(kit.facts)}`),
+    text(`TECHNIQUE PARAMS\n${paramsDigest(plan.sections.map(s => s.technique))}`),
   ];
   for (const f of frames) parts.push(text(`FRAME t=${f.t.toFixed(2)}s · section ${f.index} (${f.technique})`), image(f.jpeg, 'image/jpeg'));
   parts.push(text('Review the draft.'));

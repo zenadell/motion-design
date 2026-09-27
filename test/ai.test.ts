@@ -3,7 +3,7 @@ import { BrandKitSchema, loadBrandKit } from '../src/ai/brand-kit';
 import { fitDuration, lintPlan, totalBeats } from '../src/ai/lint';
 import { LLMError, parseJson, summarizeUsage, type JsonRequest, type JsonReply, type LLM } from '../src/ai/llm';
 import { assemble, Planner, targetOf } from '../src/ai/planner';
-import { plannerSystem, plannerUser } from '../src/ai/prompts';
+import { paramsDigest, plannerSystem, plannerUser } from '../src/ai/prompts';
 import { plannerSchema, toGeminiSchema } from '../src/ai/schema';
 import { TECHNIQUES } from '../src/engine/techniques';
 import { DEMO_BRAND } from '../src/plan/demo';
@@ -59,7 +59,7 @@ describe('parseJson', () => {
 });
 
 describe('Gemini schema', () => {
-  const bad = new Set(['$schema', 'pattern', 'default', 'maxLength', 'minLength', 'propertyNames', 'additionalProperties', 'const', '$ref', '$defs']);
+  const bad = new Set(['$schema', 'pattern', 'default', 'maxLength', 'maxItems', 'minLength', 'propertyNames', 'additionalProperties', 'const', '$ref', '$defs']);
   const keys = (o: unknown, acc = new Set<string>()): Set<string> => {
     if (Array.isArray(o)) o.forEach(x => keys(x, acc));
     else if (o && typeof o === 'object') for (const [k, v] of Object.entries(o)) { if (k !== 'properties') acc.add(k); keys(v, acc); }
@@ -70,7 +70,7 @@ describe('Gemini schema', () => {
     expect(s).toEqual({ type: 'object', properties: { w: { type: 'string', description: '(at most 12 characters; default "HI")' } } });
   });
   it('has one branch per technique with typed params', () => {
-    const s = plannerSchema(true) as any;
+    const s = plannerSchema() as any;
     const branches = s.properties.sections.items.anyOf;
     expect(branches).toHaveLength(TECHNIQUES.length);
     expect(branches.map((b: any) => b.properties.technique.enum[0])).toEqual(TECHNIQUES.map(t => t.id));
@@ -80,9 +80,10 @@ describe('Gemini schema', () => {
     expect(pm.properties.params.properties.items.items.properties.icon.enum).toContain('rocket');
     expect(JSON.stringify(s)).not.toContain('"items":false');
   });
-  it('has a loose fallback', () => {
-    const s = plannerSchema(false) as any;
-    expect(s.properties.sections.items.properties.technique.enum).toHaveLength(TECHNIQUES.length);
+  it('leaves the sections array unbounded (bounds exceed Gemini\'s state limit)', () => {
+    const s = plannerSchema() as any;
+    expect(s.properties.sections.minItems).toBeUndefined();
+    expect(s.properties.sections.maxItems).toBeUndefined();
   });
 });
 
@@ -93,6 +94,12 @@ describe('prompts', () => {
     expect(p).toContain('### `particle-morph`');
     expect(p).toContain('Reference plan');
     expect(p.length).toBeLessThan(80_000);
+  });
+  it('gives the critic the param names it may change', () => {
+    const d = paramsDigest(['wave-word', 'logo-build', 'wave-word', 'mitosis-grid']);
+    expect(d.split('\n')).toHaveLength(3);
+    expect(d).toContain('tone ∈ "light"|"dark"');
+    expect(d).toContain('mitosis-grid (beats 6–6): no params');
   });
   it('states the target and only non-empty facts', () => {
     const u = plannerUser('Launch video for our new app', KIT, targetOf({ seconds: 20, bpm: 120 }));
@@ -163,12 +170,12 @@ describe('planner', () => {
     expect(res.plan.sections[4].params.value).toBe('120+');
   });
 
-  it('falls back to a simpler schema when the API rejects it', async () => {
+  it('falls back to free-form JSON when the API rejects the schema', async () => {
     const llm = new FakeLLM([new LLMError('schema too complex', 400, true), JSON.stringify(GOOD)]);
     const res = await new Planner(llm, { brief: '', kit: KIT, seconds: 10 }).draft();
     expect(res.plan.sections).toHaveLength(7);
     expect((llm.requests[0].schema as any).properties.sections.items.anyOf).toBeDefined();
-    expect((llm.requests[1].schema as any).properties.sections.items.anyOf).toBeUndefined();
+    expect(llm.requests[1].schema).toBeUndefined();
   });
 
   it('revises with visual feedback in the same conversation', async () => {

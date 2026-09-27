@@ -10,7 +10,11 @@ import { TRANSITIONS } from '../plan/schema';
 
 type S = Record<string, unknown>;
 
-const KEEP = new Set(['type', 'properties', 'required', 'items', 'prefixItems', 'minItems', 'maxItems', 'enum', 'anyOf', 'description', 'minimum', 'maximum', 'title', 'nullable']);
+// maxItems is left out on purpose: Gemini counts every bounded array position
+// as schema states, and a 30-section plan with 22 technique branches exceeds
+// its limit ("Request contains an invalid argument"). The bound moves into the
+// description instead.
+const KEEP = new Set(['type', 'properties', 'required', 'items', 'prefixItems', 'minItems', 'enum', 'anyOf', 'description', 'minimum', 'maximum', 'title', 'nullable']);
 
 export function toGeminiSchema(input: unknown): S {
   if (Array.isArray(input)) return input.map(toGeminiSchema) as unknown as S;
@@ -26,6 +30,7 @@ export function toGeminiSchema(input: unknown): S {
     else if (k === 'const') out.enum = [v];
     else if (KEEP.has(k)) out[k] = v;
     else if (k === 'maxLength') notes.push(`at most ${v} characters`);
+    else if (k === 'maxItems' && !Array.isArray(s.prefixItems)) notes.push(`at most ${v} items`);
     else if (k === 'minLength' && (v as number) > 1) notes.push(`at least ${v} characters`);
     else if (k === 'default' && v !== undefined && !(typeof v === 'object' && v && !Object.keys(v).length)) notes.push(`default ${JSON.stringify(v)}`);
     else if (k === 'pattern' && s.description === undefined) notes.push(`pattern ${v}`);
@@ -65,23 +70,12 @@ function sectionBranch(t: (typeof TECHNIQUES)[number]): S {
 /**
  * The shape the planner model returns. The brand is not part of it: the
  * pipeline injects the extracted brand, so the model can't alter colours or
- * the logo, and doesn't spend tokens repeating them.
+ * the logo, and doesn't spend tokens repeating them. There is no "loose"
+ * variant: a schema with an untyped params object makes Gemini return empty
+ * params, so the fallback is free-form JSON checked by the validator.
  */
-export function plannerSchema(strict = true): S {
-  const section: S = strict
-    ? { anyOf: TECHNIQUES.map(sectionBranch) }
-    : {
-        type: 'object',
-        properties: {
-          technique: { type: 'string', enum: TECHNIQUES.map(t => t.id) },
-          beats: { type: 'number' },
-          params: { type: 'object', description: 'technique params exactly as in the catalog' },
-          energy: { type: 'integer', minimum: 0, maximum: 3 },
-          transition: { type: 'string', enum: [...TRANSITIONS] },
-          label: { type: 'string' },
-        },
-        required: ['technique', 'beats'],
-      };
+export function plannerSchema(): S {
+  const section: S = { anyOf: TECHNIQUES.map(sectionBranch) };
   return {
     type: 'object',
     properties: {
@@ -92,11 +86,12 @@ export function plannerSchema(strict = true): S {
         properties: {
           bpm: { type: 'number', minimum: 90, maximum: 140 },
           genre: { type: 'string', enum: ['afro-house', 'electro'] },
-          progression: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 8, description: 'optional chord symbols, one per bar' },
+          progression: { type: 'array', items: { type: 'string' }, description: 'optional: 1 to 8 chord symbols, one per bar' },
         },
         required: ['bpm', 'genre'],
       },
-      sections: { type: 'array', items: section, minItems: 3, maxItems: 30 },
+      // no minItems here either: bounding this array also exceeds Gemini's state limit
+      sections: { type: 'array', items: section, description: '3 to 30 sections' },
     },
     required: ['concept', 'title', 'music', 'sections'],
   };
