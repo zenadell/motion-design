@@ -163,6 +163,29 @@ The director names one per scene (`setpiece` in the direction) and builds the fi
 - `--feedback "…"` or `--feedback @notes.txt` holds the client's notes on earlier versions (what they rejected, what they love). They reach the director, the concept judge, the coder and the critics.
 - `motion refine <dir> --scenes id,id [--rounds 3] [--feedback …]` reworks only some scenes of a finished film (watch → critique → rewrite) and re-renders it. The rest of the film is kept exactly.
 
+## Other models through OpenRouter
+
+Any model id with a provider prefix runs through [OpenRouter](https://openrouter.ai) (one key, hundreds of models, provider prices passed through, exact cost reported per call). Set `OPENROUTER_API_KEY`; bare ids such as `gemini-3.8-flash` still go to Gemini directly. Every model flag takes either kind, so roles can mix providers:
+
+```bash
+motion models --openrouter --filter qwen          # the catalogue with prices and input types (no key needed)
+motion invent --brand out/brand.json --brief "…" --model qwen/qwen3.8-max-0902 --critic-model gemini-3.8-flash
+motion refine out/film --scenes hook --fresh --code-model z-ai/glm-5.3-flash
+```
+
+The scene critic watches video, so give it a model that takes video input (Gemini, Qwen3.8, GLM-5.3-Flash, MiniMax M3, Kimi K3); GPT and DeepSeek models take images only.
+
+### Bake-off: which model writes the best motion?
+
+```bash
+motion bakeoff out/film --scenes hook,logo-reveal,ending \
+  --models qwen/qwen3.8-max-0902,z-ai/glm-5.3-flash,openai/gpt-6-luna [--rounds 0] -o out/bakeoff
+```
+
+Every model writes the same scenes of a finished film from scratch, with identical prompts, the film's shared lib and score, and the same test → fix loop. For each scene you get one side-by-side video (the current version first, each cell labelled with the model and what it cost), a contact sheet, and `summary.json` with the critic's scores, code and critic spend, and time per model. `--rounds 1` also lets each model do one watch → rewrite round.
+
+Behind an HTTPS proxy (some cloud sandboxes), Node's `fetch` ignores `HTTPS_PROXY`; run with `NODE_USE_ENV_PROXY=1` (Node 22.21+).
+
 ## Replicate mode: rebuild a film you love
 
 ```bash

@@ -3,6 +3,9 @@ import { join } from 'node:path';
 import { extractBrand } from '../ai/brand';
 import { loadBrandKit } from '../ai/brand-kit';
 import { Gemini, DEFAULT_MODEL, apiKey } from '../ai/gemini';
+import { isOpenRouterId, llmFor } from '../ai/models';
+import { openRouterKey } from '../ai/openrouter';
+import { bakeoff } from './bakeoff';
 import { summarizeUsage, type LLM, type Usage } from '../ai/llm';
 import { loadBar } from '../ai/bar';
 import { invent } from '../ai/invent';
@@ -24,11 +27,21 @@ const num = (v: string | true | undefined) => (typeof v === 'string' && v.trim()
 const log = (s: string) => console.error(s);
 const svgOf = (d: string, box: number[]) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${box.join(' ')}"><path fill="#111" d="${d}"/></svg>\n`;
 
+/** A model by id: "provider/model" ids go through OpenRouter, bare ids to Gemini. */
+function modelById(id: string | undefined): LLM {
+  if (isOpenRouterId(id)) {
+    if (!openRouterKey()) throw new Error('set OPENROUTER_API_KEY first (https://openrouter.ai/keys)');
+  } else if (!apiKey()) throw new Error('set GEMINI_API_KEY first (https://aistudio.google.com/apikey)');
+  return llmFor(id, log);
+}
+
 function gemini(flags: Flags): LLM {
   if (typeof flags.replay === 'string') return new ReplayLLM(flags.replay);
-  if (!apiKey()) throw new Error('set GEMINI_API_KEY first (https://aistudio.google.com/apikey)');
-  return new Gemini({ model: str(flags.model), log });
+  return modelById(str(flags.model) ?? process.env.MOTION_MODEL);
 }
+
+/** --code-model / --critic-model: another model for one role. */
+const roleModel = (flags: Flags, flag: string) => (str(flags[flag]) ? modelById(str(flags[flag])) : undefined);
 
 function genreOf(v: string | true | undefined) {
   if (v === undefined) return undefined;
@@ -50,6 +63,17 @@ export async function runAi(cmd: string, pos: string[], flags: Flags): Promise<b
   const out = str(flags.o);
   switch (cmd) {
     case 'models': {
+      if (flags.openrouter) {
+        // OpenRouter's catalogue is public: no key needed
+        const res = await fetch('https://openrouter.ai/api/v1/models');
+        if (!res.ok) throw new Error(`OpenRouter model list: ${res.status} ${(await res.text()).slice(0, 200)}`);
+        const { data } = (await res.json()) as { data: { id: string; pricing?: Record<string, string>; architecture?: { input_modalities?: string[] }; top_provider?: { max_completion_tokens?: number } }[] };
+        const filter = str(flags.filter)?.toLowerCase();
+        const per = (v?: string) => (v ? `$${(Number(v) * 1e6).toFixed(3)}` : '?');
+        for (const m of data.filter(m => !filter || m.id.toLowerCase().includes(filter)).sort((a, b) => a.id.localeCompare(b.id)))
+          console.log(`${m.id.padEnd(42)} in ${per(m.pricing?.prompt).padStart(8)} out ${per(m.pricing?.completion).padStart(8)} per 1M · ${(m.architecture?.input_modalities ?? []).join(',')}`);
+        return true;
+      }
       if (!apiKey()) throw new Error('set GEMINI_API_KEY first (https://aistudio.google.com/apikey)');
       const g = new Gemini({ model: str(flags.model), log });
       const list = await g.models();
@@ -131,7 +155,7 @@ export async function runAi(cmd: string, pos: string[], flags: Flags): Promise<b
       } else throw new Error('missing <url> or --brand brand.json');
       mkdirSync(dir, { recursive: true });
       writeFileSync(join(dir, 'brand.json'), JSON.stringify(kit, null, 2));
-      const sub = (flag: string) => (str(flags[flag]) ? new Gemini({ model: str(flags[flag]), log }) : undefined);
+      const sub = (flag: string) => roleModel(flags, flag);
       const list = (flag: string) => (str(flags[flag]) ?? '').split(',').map(x => x.trim()).filter(Boolean);
       const bar = list('bar-video').length || list('bar-code').length ? await loadBar(list('bar-video'), list('bar-code')) : undefined;
       if (bar) log(`  quality bar: ${bar.videos.length} film(s), ${Math.round((bar.code?.length ?? 0) / 1000)}k chars of reference code`);
@@ -164,15 +188,38 @@ export async function runAi(cmd: string, pos: string[], flags: Flags): Promise<b
       const bar = list('bar-video').length || list('bar-code').length ? await loadBar(list('bar-video'), list('bar-code')) : undefined;
       const seconds = v.plan.sections.reduce((a, x) => a + x.beats, 0) * (60 / v.plan.music.bpm);
       const res = await invent(llm, {
-        kit: loadBrandKit(read('brand.json')), brief: readBrief(flags), direction, resume: { plan: v.plan, only }, seconds, bpm: v.plan.music.bpm,
+        kit: loadBrandKit(read('brand.json')), brief: readBrief(flags), direction, resume: { plan: v.plan, only, fresh: !!flags.fresh }, seconds, bpm: v.plan.music.bpm,
         bar, feedback: str(flags.feedback)?.startsWith('@') ? readFileSync(str(flags.feedback)!.slice(1), 'utf8') : str(flags.feedback),
-        rounds: num(flags.rounds) ?? 3, filmRounds: num(flags['film-rounds']) ?? 0, budget: num(flags.budget), target: num(flags.target),
+        candidates: num(flags.candidates) ?? 1, rounds: num(flags.rounds) ?? 3, filmRounds: num(flags['film-rounds']) ?? 0, budget: num(flags.budget), target: num(flags.target),
         render: !flags['no-render'], workers: num(flags.workers) ?? 3, outDir: dir, log,
+        codeLLM: roleModel(flags, 'code-model'), criticLLM: roleModel(flags, 'critic-model'),
       });
       mkdirSync(dir, { recursive: true });
       writeFileSync(join(dir, 'brand.json'), readFileSync(join(src, 'brand.json')));
       printUsage(res.usage);
       console.log(`✓ ${res.video ?? join(dir, 'plan.json')} — refined ${only.join(', ')}`);
+      return true;
+    }
+    case 'bakeoff': {
+      const src = pos[0];
+      if (!src) throw new Error('missing <invent output dir>');
+      const listOf = (flag: string) => (str(flags[flag]) ?? '').split(',').map(x => x.trim()).filter(Boolean);
+      const scenes = listOf('scenes'), models = listOf('models');
+      if (!scenes.length) throw new Error('missing --scenes id1,id2');
+      if (!models.length) throw new Error('missing --models provider/model,… (e.g. qwen/qwen3.8-max-0902,z-ai/glm-5.3-flash)');
+      const critic = modelById(str(flags['critic-model']) ?? (apiKey() ? DEFAULT_MODEL : `google/${DEFAULT_MODEL}`));
+      const dir = out ?? 'out/bakeoff';
+      const res = await bakeoff({
+        src, scenes, models, critic, rounds: num(flags.rounds) ?? 0, parallel: num(flags.parallel) ?? 2, outDir: dir, log,
+        feedback: str(flags.feedback)?.startsWith('@') ? readFileSync(str(flags.feedback)!.slice(1), 'utf8') : str(flags.feedback),
+      });
+      log('');
+      log(`  ${'model'.padEnd(34)} ${scenes.map(s => s.slice(0, 14).padStart(15)).join('')}   code $   critic $   time`);
+      for (const e of res.entries) {
+        if (e.error) { log(`  ${e.model.padEnd(34)} failed: ${e.error.slice(0, 120)}`); continue; }
+        log(`  ${e.model.padEnd(34)} ${scenes.map(s => String(e.scores?.[s] ?? '–').padStart(15)).join('')}   ${(e.codeUsd ?? 0).toFixed(3).padStart(6)}   ${(e.criticUsd ?? 0).toFixed(3).padStart(8)}   ${e.seconds}s`);
+      }
+      console.log(`✓ ${res.videos.join(', ')}`);
       return true;
     }
     case 'replicate': {
@@ -181,7 +228,7 @@ export async function runAi(cmd: string, pos: string[], flags: Flags): Promise<b
       const dir = out ?? 'out/replicate';
       const llm = gemini(flags);
       const kit = loadBrandKit(JSON.parse(readFileSync(str(flags.brand)!, 'utf8')));
-      const sub = (flag: string) => (str(flags[flag]) ? new Gemini({ model: str(flags[flag]), log }) : undefined);
+      const sub = (flag: string) => roleModel(flags, flag);
       const res = await replicate(llm, {
         videoFile: pos[0], kit, brief: readBrief(flags), keepColors: !!flags['keep-colors'],
         candidates: num(flags.candidates), rounds: num(flags.rounds), filmRounds: flags['no-qa'] ? 0 : num(flags['film-rounds']),

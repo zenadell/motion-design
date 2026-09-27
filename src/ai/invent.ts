@@ -50,8 +50,12 @@ export interface InventOptions {
   /** Separate models for writing code and for critiquing (default: the main model). */
   codeLLM?: LLM;
   criticLLM?: LLM;
-  /** Refine an existing film: keep its code and rework only the listed scene ids (needs `direction`). */
-  resume?: { plan: Plan; only: string[] };
+  /**
+   * Refine an existing film: keep its code and rework only the listed scene
+   * ids (needs `direction`). `fresh` writes those scenes again from scratch
+   * (N candidates, like a new film) instead of starting from their current code.
+   */
+  resume?: { plan: Plan; only: string[]; fresh?: boolean };
   /** Skip the director: use this direction (replicate mode). */
   direction?: Direction;
   /** The client's feedback on earlier versions; the director, the concept judge and the critics must respect it. */
@@ -342,12 +346,13 @@ export async function invent(llm: LLM, o: InventOptions) {
 
     const history: Record<string, { step: string; score: number }[]> = {};
     const best: { code: SceneCode; score: number; critique: SceneCritique; clip: Buffer }[] = new Array(d.scenes.length);
-    log(`3/6 scenes: ${o.resume ? 'the current version' : `${o.candidates ?? 2} candidates`} each, then up to ${o.rounds ?? 2} watch → rewrite rounds`);
+    const fromCurrent = !!o.resume && !o.resume.fresh;
+    log(`3/6 scenes: ${fromCurrent ? 'the current version' : `${o.candidates ?? 2} candidates`} each, then up to ${o.rounds ?? 2} watch → rewrite rounds`);
     const todo = o.resume ? d.scenes.filter(s => o.resume!.only.includes(s.id)) : d.scenes;
     await pool(todo, conc, async s => {
       const i = d.scenes.indexOf(s);
       history[s.id] = [];
-      const cands = o.resume
+      const cands = fromCurrent
         ? [await (async () => {
             const cr = await critique(i, await clipOf(i, scenePlan(i, scenes[i])), 'current');
             history[s.id].push({ step: 'current', score: cr.s });

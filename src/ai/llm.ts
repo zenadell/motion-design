@@ -1,6 +1,6 @@
-// The one interface the pipeline talks to. Gemini is the default provider;
-// anything that can return JSON (another API, a local model, a test fake)
-// can implement it.
+// The one interface the pipeline talks to. Gemini is the default provider,
+// OpenRouter reaches most other models (see models.ts); anything that can
+// return JSON (another API, a local model, a test fake) can implement it.
 
 export type Part = { text: string } | { image: { mime: string; data: string } } | { video: { mime: string; data: string; fps?: number } };
 
@@ -28,6 +28,8 @@ export interface Usage {
   output: number;
   thinking: number;
   ms: number;
+  /** Exact cost when the provider reports it (OpenRouter does); otherwise estimated from PRICES. */
+  usd?: number;
 }
 
 export interface JsonReply {
@@ -109,6 +111,7 @@ export function priceOf(modelId: string) {
 }
 
 export function costOf(u: Usage): number | undefined {
+  if (typeof u.usd === 'number') return u.usd;
   const p = priceOf(u.model);
   return p ? (u.input * p.input + (u.output + u.thinking) * p.output) / 1e6 : undefined;
 }

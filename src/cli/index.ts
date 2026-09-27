@@ -23,7 +23,9 @@ usage:
   motion gallery  [-o dir] [--quick] [--only id,id]
                                                  contact sheet of every technique (smoke test)
 
-AI director (needs GEMINI_API_KEY; model: gemini-3.8-flash, override with --model or MOTION_MODEL):
+AI director (needs GEMINI_API_KEY; model: gemini-3.8-flash, override with --model or MOTION_MODEL).
+Any model id with a provider prefix (qwen/qwen3.8-max-0902, z-ai/glm-5.3-flash, openai/gpt-6-luna …)
+runs through OpenRouter instead and needs OPENROUTER_API_KEY; --model, --code-model and --critic-model all take either:
   motion make     <url> --brief "..." [--seconds 20] [--genre afro-house|electro] [--bpm 120]
                   [--logo mark.svg] [--brand brand.json] [--qa 1 | --no-qa] [--no-render] [-o dir]
                                                  website → brand kit → plan → visual review → MP4
@@ -34,8 +36,11 @@ AI director (needs GEMINI_API_KEY; model: gemini-3.8-flash, override with --mode
                   [--feedback "..." | @file]                           the client's notes on earlier versions
                                                  the model designs a new look, writes every scene's code, watches
                                                  its renders and rewrites until the critic's score stops improving
-  motion refine   <invent-dir> --scenes id,id [--rounds 3] [--feedback "..."] [--bar-video …] [-o dir]
-                                                 rework only some scenes of a finished film (watch → critique → rewrite)
+  motion refine   <invent-dir> --scenes id,id [--rounds 3] [--fresh [--candidates n]] [--code-model id] [--feedback "..."] [-o dir]
+                                                 rework only some scenes of a finished film (watch → critique → rewrite);
+                                                 --fresh writes them again from scratch
+  motion bakeoff  <invent-dir> --scenes id,id --models provider/model,… [--rounds 0] [--critic-model id] [-o dir]
+                                                 the same scenes written by several models, side by side, with cost and scores
   motion replicate <reference.mp4> --brand brand.json [--brief "..."] [--keep-colors] [same flags as invent]
                                                  watch a film you like and rebuild it, shot for shot, for the brand
   motion brand    <url> [--logo mark.svg] [-o brand.json]
@@ -44,14 +49,14 @@ AI director (needs GEMINI_API_KEY; model: gemini-3.8-flash, override with --mode
                                                  write a plan (validated and repaired automatically)
   motion review   <plan.json> [--brand brand.json] [-o dir]
                                                  vision-model critique of rendered frames
-  motion models                                  models your key can use
+  motion models   [--openrouter [--filter qwen]]  models your Gemini key can use, or OpenRouter's catalogue with prices
   motion scrape   <url> [--mark #FFFFFF] [-o dir]
                                                  what the brand extractor sees (no model call)
 
   --brief accepts @file.txt · --replay replies.json plays back recorded model replies (tests, no key)
 `;
 
-const VALUE_FLAGS = ['at', 'crf', 'workers', 'blur', 'from', 'to', 'only', 'brand', 'brief', 'seconds', 'bpm', 'genre', 'model', 'logo', 'effort', 'qa', 'mark', 'replay', 'candidates', 'rounds', 'film-rounds', 'budget', 'target', 'code-model', 'critic-model', 'bar-video', 'bar-code', 'feedback', 'scenes'];
+const VALUE_FLAGS = ['at', 'crf', 'workers', 'blur', 'from', 'to', 'only', 'brand', 'brief', 'seconds', 'bpm', 'genre', 'model', 'logo', 'effort', 'qa', 'mark', 'replay', 'candidates', 'rounds', 'film-rounds', 'budget', 'target', 'code-model', 'critic-model', 'bar-video', 'bar-code', 'feedback', 'scenes', 'models', 'filter', 'parallel'];
 
 function parse(argv: string[]) {
   const pos: string[] = [], flags: Record<string, string | true> = {};
