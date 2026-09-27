@@ -9,11 +9,11 @@ import { DISPLAY_NAMES, SERIF_NAMES } from '../plan/fonts';
 import type { Plan, PlanInput } from '../plan/schema';
 import { validatePlan } from '../plan/validate';
 import { factCorpus, type BrandKit } from './brand-kit';
-import { motionReport, type MotionReport } from './metrics';
+import { beatReport, motionReport, type MotionReport } from './metrics';
 import { parseJson, summarizeUsage, text, user, video, type Effort, type LLM, type Part, type Usage } from './llm';
 import {
   coderSystem, conceptsSchema, conceptsUser, critiqueScore, developUser, directionSchema, directorSystem, directorUser, filmCriticSchema, filmCriticSystem, fixUser, libSchema, libUser,
-  pickSchema, pickSystem, type Concept,
+  pairSchema, pairSystem, pickSchema, pickSystem, type Concept,
   rewriteUser, sceneCriticSchema, sceneCriticSystem, sceneCriticUser, sceneSchema, sceneUser,
   type Direction, type FilmCritique, type SceneCritique,
 } from './invent-prompts';
@@ -285,33 +285,59 @@ export async function invent(llm: LLM, o: InventOptions) {
       return null;
     };
     /** Render a scene's clip (what the critic watches) and measure coverage and motion on the same frames. */
-    const clipOf = async (i: number, input: PlanInput): Promise<{ clip: Buffer; m: MotionReport }> => {
+    const clipOf = async (i: number, input: PlanInput): Promise<{ clip: Buffer; m: MotionReport; beat: ReturnType<typeof beatReport> }> => {
       const v = validatePlan(input);
       if (!v.ok) throw new Error('clip of an invalid plan');
       const reel = await openReel(v.plan, browser);
       try {
         const clip = (await renderClips(reel, [{ from: 0, to: reel.duration }], { width: 640, fps: 24 }))[0];
         const samples = await reel.page.evaluate(([a, b]) => window.__reel!.metrics!(a, b, 1 / 12), [0, reel.duration] as const);
+        const perFrame = await reel.page.evaluate(([a, b]) => window.__reel!.metrics!(a, b, 1 / 60), [0, reel.duration] as const);
         const last = i === d.scenes.length - 1;
-        return { clip, m: motionReport(samples, last ? reel.duration - 1.5 : Infinity) };
+        const hold = last ? reel.duration - 1.5 : Infinity;
+        const m = motionReport(samples, hold);
+        const br = beatReport(perFrame, 60 / bpm, hold);
+        return { clip, m: { ...m, flags: [...m.flags, ...br.flags] }, beat: br };
       } finally {
         await reel.page.context().close();
       }
     };
-    const measured = (m: MotionReport) =>
-      `MEASURED ON THE RENDER (objective): average frame coverage ${Math.round(m.coverage * 100)}%, empty frames ${Math.round(m.emptyShare * 100)}%, mean motion ${(m.motion * 1000).toFixed(1)}‰ per 1/12 s${m.flags.length ? `\nProblems: ${m.flags.join(' ')}` : ' (no measured problems)'}`;
-    const critique = async (i: number, cm: { clip: Buffer; m: MotionReport }, tag: string) => {
+    const measured = (m: MotionReport, b?: ReturnType<typeof beatReport>) =>
+      `MEASURED ON THE RENDER (objective): average frame coverage ${Math.round(m.coverage * 100)}%, empty frames ${Math.round(m.emptyShare * 100)}%, mean motion ${(m.motion * 1000).toFixed(1)}‰ per 1/12 s${b ? `, beat precision ${Math.round(b.sync * 100)}% of ${b.hardChanges} hard changes on the 16th grid` : ''}${m.flags.length ? `\nProblems: ${m.flags.join(' ')}` : ' (no measured problems)'}`;
+    const critique = async (i: number, cm: { clip: Buffer; m: MotionReport; beat?: ReturnType<typeof beatReport> }, tag: string) => {
       const refClip = o.reference?.clips?.[i];
       const c = await ask<SceneCritique>(criticLLM, `critique ${d.scenes[i].id} ${tag}`, sceneCriticSystem(), [
         ...barParts(3),
         sceneCriticUser(d, i) + refNote,
         ...(refClip ? [text('REFERENCE SEGMENT (the target to match):'), video(refClip, 12)] : []),
         text('RENDERED SCENE:'), video(cm.clip, 12),
-        text(measured(cm.m)),
+        text(measured(cm.m, cm.beat)),
       ], sceneCriticSchema(), 'medium');
       // measured problems always reach the rewrite, even if the critic did not list them
       c.fixes = [...(Array.isArray(c.fixes) ? c.fixes : []), ...cm.m.flags.map(f => `(measured) ${f}`)];
       return { c, s: critiqueScore(c), clip: cm.clip };
+    };
+
+    /**
+     * Head-to-head: is `next` better than `cur`? Judged twice with the order
+     * swapped (position bias is 10–15 points in frontier judges); only a win
+     * in both orders counts. Returns 'next', 'cur' or 'tie'.
+     */
+    const pairwise = async (i: number, curClip: Buffer, nextClip: Buffer, tag: string): Promise<'next' | 'cur' | 'tie'> => {
+      const ask1 = (a: Buffer, b: Buffer, k: string) =>
+        ask<{ winner: 'A' | 'B' | 'tie'; reason: string }>(criticLLM, `pair ${d.scenes[i].id} ${tag} ${k}`, pairSystem(), [
+          `SCENE "${d.scenes[i].id}": ${d.scenes[i].idea}${feedbackNote}`,
+          text('VERSION A:'), video(a, 12), text('VERSION B:'), video(b, 12), 'Which is better?',
+        ], pairSchema(), 'low');
+      const [x, y] = await Promise.all([ask1(curClip, nextClip, 'ab'), ask1(nextClip, curClip, 'ba')]);
+      const nextWins = (x.winner === 'B' ? 1 : 0) + (y.winner === 'A' ? 1 : 0);
+      const curWins = (x.winner === 'A' ? 1 : 0) + (y.winner === 'B' ? 1 : 0);
+      return nextWins === 2 ? 'next' : curWins === 2 ? 'cur' : nextWins > curWins ? 'next' : curWins > nextWins ? 'cur' : 'tie';
+    };
+    /** Accept `next` over `cur`: a head-to-head win, or a tie with a clearly higher rubric score. */
+    const better = async (i: number, cur: { score: number; clip: Buffer }, next: { score: number; clip: Buffer }, tag: string) => {
+      const v = await pairwise(i, cur.clip, next.clip, tag);
+      return v === 'next' || (v === 'tie' && next.score >= cur.score + 0.5);
     };
 
     const history: Record<string, { step: string; score: number }[]> = {};
@@ -338,6 +364,8 @@ export async function invent(llm: LLM, o: InventOptions) {
       const good = cands.filter((x): x is NonNullable<typeof x> => !!x).sort((a, b) => b.score - a.score);
       if (!good.length) throw new Error(`no working version of scene "${s.id}"`);
       let cur = good[0];
+      // the rubric score only orders the field; the head-to-head decides between the top two
+      if (good.length > 1 && (await better(i, cur, good[1], 'cands'))) cur = good[1];
       log(`  ${s.id}: candidates ${good.map(g => g.score).join(' / ')} → kept ${cur.score}`);
       for (let r = 1; r <= (o.rounds ?? 2) && cur.score < target && !overBudget(); r++) {
         const rw = await ask<SceneCode>(codeLLM, `rewrite ${s.id} · ${r}`, coder(), [
@@ -348,8 +376,9 @@ export async function invent(llm: LLM, o: InventOptions) {
         if (!ok) continue;
         const cr = await critique(i, await clipOf(i, scenePlan(i, ok)), `r${r}`);
         history[s.id].push({ step: `rewrite ${r}`, score: cr.s });
-        log(`  ${s.id}: rewrite ${r} → ${cr.s}${cr.s > cur.score ? ' (kept)' : ` (worse than ${cur.score}, discarded)`}`);
-        if (cr.s > cur.score) cur = { code: ok, score: cr.s, critique: cr.c, clip: cr.clip };
+        const win = await better(i, cur, { score: cr.s, clip: cr.clip }, `r${r}`);
+        log(`  ${s.id}: rewrite ${r} → ${cr.s}${win ? ' (wins head-to-head, kept)' : ` (does not beat ${cur.score} head-to-head, discarded)`}`);
+        if (win) cur = { code: ok, score: cr.s, critique: cr.c, clip: cr.clip };
       }
       best[i] = cur;
       scenes[i] = cur.code;
@@ -409,8 +438,9 @@ export async function invent(llm: LLM, o: InventOptions) {
         if (!ok) return;
         const cr = await critique(i, await clipOf(i, scenePlan(i, ok)), `film${r}`);
         history[w.id].push({ step: `film fix ${r}`, score: cr.s });
-        log(`  ${w.id}: film fix → ${cr.s}${cr.s >= cur.score ? ' (kept)' : ` (worse than ${cur.score}, discarded)`}`);
-        if (cr.s >= cur.score) { best[i] = { code: ok, score: cr.s, critique: cr.c, clip: cr.clip }; scenes[i] = ok; }
+        const win = await better(i, cur, { score: cr.s, clip: cr.clip }, `film${r}`);
+        log(`  ${w.id}: film fix → ${cr.s}${win ? ' (wins head-to-head, kept)' : ' (does not win head-to-head, discarded)'}`);
+        if (win) { best[i] = { code: ok, score: cr.s, critique: cr.c, clip: cr.clip }; scenes[i] = ok; }
       });
       plan = await whole();
     }

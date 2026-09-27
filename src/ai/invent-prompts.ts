@@ -39,6 +39,7 @@ NEW: earlier films for this brand used the following; the film you design must l
 
 Rules:
 - Length: the scenes' beats must add up exactly to the target beats. 6–10 scenes; beats in multiples of 0.5. Most scenes 2–6 beats (short scenes stay dynamic; long ones go static), at most one scene longer than 8 beats. The first second is the most striking frame of the film.
+- At least TWO SIGNATURE SET PIECES: moments with real production value that make people rewatch, built with depth (3D camera, parallax layers), particle systems (800+ points), light (glow, bloom, rim light, light sweeps) and dense layered detail. Flat type on a colour field is not a set piece. Mark them in the scene ideas.
 - The last scene resolves on the brand: the logo mark (S.logo / S.logoPath / S.logoPoints), the name and the site, holding still and clean for the final 1.5 seconds.
 - On-screen text: short, punchy, in the brand's own voice, from the brief and the brand facts. Never invent numbers, clients, places or awards.
 - Fonts: display from ${DISPLAY_NAMES.join(', ')}; optional serif from ${SERIF_NAMES.join(', ')}.
@@ -159,7 +160,9 @@ How you work:
 - Plan each scene as a beat-by-beat timeline first (in comments at the top of the draw body), then build it in layers: background (never an empty flat field: light, gradient, texture), midground, foreground hero, overlay details.
 - For hero words use S.title (big, crafted presets: slam, rise, split, stretch, scramble, outline-fill, stack) and for rich backgrounds S.bg (mesh, grid, flow, dots, rays, stripes); S.fluid gives liquid/molten metaballs. Customise and combine them; replace them only with something better.
 - Use the pro toolkit: S.type for kinetic type, S.kf / S.spring for motion curves, S.cam for 3D, S.glow / S.bloom for light, S.morph / S.iconPoints / S.logoPoints for particles, S.layer for masks and composites, S.fx for the engine's finished effects when they serve the idea.
-- Hero type 160–400 px. Every key word fully readable for at least 0.6 s. Something happens on every beat during energy sections.
+- Hero type 160–400 px. Every key word fully readable for at least 0.6 s. Something happens on every beat during energy sections; nothing stays still for more than 0.5 s before the final hold.
+- Beat precision is measured: every hard change (cut, slam, colour flip, swap) must land exactly on the 16th-note grid. Compute its time as S.b(n) with n a multiple of 0.25, never a free number of seconds.
+- Set pieces (scenes the direction marks as signature moments) deserve real production value: depth, hundreds or thousands of particles, light, layered micro-detail. Their draw body can be long.
 - Only show the on-screen text given in the direction. Never add numbers or claims of your own.
 
 Code rules (the engine enforces them; violations come back to you as errors):
@@ -409,3 +412,18 @@ export function developUser(base: string, c: Concept): string {
 DEVELOP THIS CONCEPT into the full direction (keep its idea, hook and signature moment):
 ${JSON.stringify(c, null, 1)}`;
 }
+
+// ── Pairwise judging (more reliable than absolute scores; run in both orders) ──
+
+export function pairSystem(): string {
+  return `You are the toughest design director in motion design. You watch two versions (A and B) of the same scene of a brand film and decide which one is better motion design: the more captivating, premium, rhythmic and polished piece that better realises the scene's idea. Ignore which one came first. If they are genuinely equal, say "tie". Be decisive.`;
+}
+
+export const pairSchema = () => ({
+  type: 'object',
+  properties: {
+    winner: { type: 'string', enum: ['A', 'B', 'tie'] },
+    reason: { type: 'string', description: 'one or two sentences' },
+  },
+  required: ['winner', 'reason'],
+});

@@ -165,3 +165,28 @@ motion replicate reference.mp4 --brand out/brand.json --brief "Our launch film" 
 | v4 | + crafted presets, the two hand-made reels as the bar (videos and code), client feedback | $5.35 + $0.57 refine | "Kinetic Riso Press": huge editorial type, paper, flame-orange and ink alternating, split grids, a type iris, breakbeat score. Film review 9/10; scene scores 4.4–6.5. The ending (2.9) was refined to 4.7 with `motion refine` |
 
 The cost column is an upper bound: it prices every input token at the full rate, but repeated prompt prefixes (the bar films and code) are billed at Gemini's cached-token rate.
+
+## What the research says, and what we measured
+
+- **Measured checks beat vague critique.** MoVer (SIGGRAPH 2025) raised correct AI-generated motion graphics from 58.8% to 93.6% by checking precise, time-stamped properties and feeding the failures back. We check:
+  - frame coverage;
+  - still stretches (at most 0.5 s, the reference reels' limit);
+  - **beat precision:** every hard change, measured at 60 fps, must land on the 16th-note grid; the reference reels reach 77–95%.
+- **Vision models see appearance better than timing.** Animation2Code (2026) found they reproduce how an animation looks but consistently miss its temporal dynamics. So timing is measured, not judged.
+- **Pairwise judging is more reliable than absolute scores.** Candidates and rewrites are accepted on a head-to-head win, judged in both orders to cancel position bias (10–15 points in frontier judges).
+- **A judge that shares the generator's blind spots adds little evidence.** This is why reference films, measurements and the client's own feedback matter more than self-review.
+
+`scripts/film-profile.py film.mp4 …` prints an objective craft profile of rendered films side by side: cuts per beat, cut beat-sync, accents per beat, motion energy, longest still, frame fill, light/dark alternation.
+
+| metric | Jomiez reel (hand-made) | résumé reel (hand-made) | invent v4 (Gemini) | invent v2 (Gemini) | invent v1 (Gemini) |
+|---|---:|---:|---:|---:|---:|
+| cuts per beat | 0.37 | 0.57 | 0.73 | 0.19 | 0 |
+| cuts on the 16th grid | 95% | 77% | 63% | 78% | – |
+| accents per beat | 1.21 | 1.47 | 1.10 | 0.52 | 0.15 |
+| motion (mean, ‰) | 12.7 | 41.3 | 25.8 | 6.4 | 0.9 |
+| longest still | 0.48 s | 0.37 s | 0.77 s | 2.32 s | 3.33 s |
+| frame fill (mean) | 0.12 | 0.23 | 0.31 | 0.12 | 0.05 |
+
+By v4 the generated film matches the hand-made reels on energy, fill and cutting. It trails on beat precision and stillness, and above all on **set pieces**: scenes with depth, particles and light that carry production value. Flat type on colour, however busy, reads as "template".
+
+**Pro as coder (one scene, head to head):** Gemini 3.1 Pro rewrote v4's weakest scene twice. Rewrite 1 scored 5.7 on the rubric but lost head to head. Rewrite 2 scored 3.7 but won it. The two judges disagreed completely, and a human review ranked rewrite 1 first. All three versions kept the same modest idea and a 2-second freeze.

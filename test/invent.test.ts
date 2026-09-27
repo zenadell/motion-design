@@ -86,3 +86,16 @@ describe('toolkit fixtures', () => {
     for (const f of ['test/fixtures/toolkit.plan.json', 'test/fixtures/presets.plan.json']) expect(validatePlan(JSON.parse(readFileSync(f, 'utf8'))).ok, f).toBe(true);
   });
 });
+
+import { beatReport } from '../src/ai/metrics';
+describe('beat precision', () => {
+  it('flags hard changes off the 16th-note grid', () => {
+    // 60 fps, 120 BPM (16th = 0.125 s): cuts at 0.5 s (on grid) and 0.8 s (off grid)
+    const frames = Array.from({ length: 121 }, (_, i) => ({ t: i / 60, coverage: 0.5, motion: i === 30 || i === 48 ? 0.3 : 0.005 }));
+    const r = beatReport(frames, 0.5);
+    expect(r.hardChanges).toBe(2);
+    expect(r.onGrid).toBe(1);
+    expect(r.flags[0]).toContain('0.800 s (nearest 0.750 s)');
+    expect(beatReport(frames.map(f => (f.t === 0.8 ? { ...f, motion: 0.005 } : f)), 0.5).flags).toEqual([]);
+  });
+});
