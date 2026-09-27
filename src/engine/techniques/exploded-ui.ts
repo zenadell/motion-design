@@ -88,9 +88,8 @@ export default define({
   beats: { min: 3, max: 6, default: 4 },
   energy: 2,
   example: {
-    headline: ['We Build Powerful Software,', 'Websites & AI-Driven', 'Solutions.'],
-    rating: { value: '4.9', label: 'Trusted by businesses globally' },
-    chat: { name: 'Assistant', message: 'What are we building today?' },
+    headline: ['Design that moves,', 'products that ship.'],
+    chat: { name: 'Northwind', message: 'What should we make next?' },
   },
   draw(g, lt, p, c) {
     const T = c.theme, b = c.bt;

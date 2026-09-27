@@ -88,11 +88,13 @@ describe('Gemini schema', () => {
 });
 
 describe('prompts', () => {
-  it('carries the guide, the catalog and the reference plan', () => {
+  it('carries the guide and the catalog, and no real brand\'s copy', () => {
     const p = plannerSystem();
     expect(p).toContain('Continuity pairs');
     expect(p).toContain('### `particle-morph`');
-    expect(p).toContain('Reference plan');
+    // no copy from a real brand's reel that the model could lift
+    expect(p).not.toMatch(/POWERFUL|NIGERIA|CHAKA|TRANSFORM|BUSINESSES\.|WEBSITES/);
+    expect(p).toContain('ORIGINALITY');
     expect(p.length).toBeLessThan(80_000);
   });
   it('gives the critic the param names it may change', () => {

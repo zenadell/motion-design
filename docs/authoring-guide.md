@@ -29,7 +29,7 @@ The first frame must already be interesting (`blade-open` or a `word-cuts` word)
 
 ## 4. Copy
 
-- Hook: 3–5 words, all caps, ≤ 10 characters each. Build the brand's own claim out of them, e.g. "WE / BUILD / POWERFUL / SOFTWARE".
+- Hook: 3–5 words, all caps, ≤ 10 characters each. Build the brand's own claim out of them, e.g. "IDEAS / DESERVE / MOTION".
 - Big words: `glitch-word` ≤ 10 characters, `dot-matrix-word` 1–3 characters plus a suffix, `flip-word` ≤ 12 characters.
 - Use the brand's real headline, services, projects and numbers. Never invent statistics, clients or locations. If the brief doesn't state a fact, leave it out.
 - The end card is name, tagline (≤ 60 chars), CTA (≤ 18 chars) and contact.
@@ -50,24 +50,18 @@ The first frame must already be interesting (`blade-open` or a `word-cuts` word)
 | `stat-odometer` (tension) | `logo-build` | the blade crosses the frame, then the mark assembles |
 | `logo-build` | `end-card` | the tile glides into the lockup |
 
-## 6. Recipes
+## 6. Shapes, not templates
 
-**Brand showreel, 26 s (52 beats)**: see `examples/jomiez.plan.json`.
+These are starting shapes. Build each piece around what this brand actually does and says: change the hook, the order, the lengths and the techniques. Two videos for two different brands, or two briefs for the same brand, should not share a section list.
 
-```
-blade-open 0.5 · word-cuts 1.5 · glitch-word 2 (blade) · wave-word 2 · dot-matrix-word 2 · swiss-stack 2 · flip-word 2
-code-editor 4 · exploded-ui 4 · particle-morph 8 · dot-globe 8 · montage 2 · stat-odometer 2 (energy 3) · logo-build 4 · end-card 8
-```
+- **Showreel** (20–30 s): a hook, then 3–6 quick type beats on what the brand does. Then one product or UI moment, one proof moment (reach, work or a real number), and the logo and end card. [`examples/jomiez.plan.json`](../examples/jomiez.plan.json) is one version of this shape.
+- **Personal reel** (12–20 s): a type-led hook, one shape or camera sequence that shows craft (`type-drop` → `mitosis-grid` → `portal-dolly` → `albers-colour`), and a `signature-card`. [`examples/resume-reel.plan.json`](../examples/resume-reel.plan.json) is one version.
+- **Product launch** (14–20 s): a hook, then the product (`code-editor` → `exploded-ui`, or a `wave-word` in a browser frame). Then what it does (`particle-morph`), one real number, the logo and the end card.
+- **Manifesto** (10–16 s): one statement spread over 3–4 type techniques (`word-cuts`, `swiss-stack`, `flip-word`, `marquee`, `impact-word`) with a single colour moment, then straight to the logo.
 
-**Personal reel, 15 s (30 beats)**: see `examples/resume-reel.plan.json`.
-
-```
-word-cuts 1.5 · impact-word 2.5 (slice) · marquee 2 · type-drop 4 · mitosis-grid 6 · portal-dolly 6 · albers-colour 4 · signature-card 4
-```
-
-**Product launch, 16 s (32 beats)**
-
-```
-blade-open 0.5 · word-cuts 1.5 · glitch-word 2 (blade) · code-editor 4 · exploded-ui 4 · particle-morph 6
-stat-odometer 2 (energy 3) · logo-build 4 · end-card 8
-```
+Hooks to vary between:
+- `blade-open` → `word-cuts`;
+- `impact-word` on its own;
+- `glitch-word` as the very first frame;
+- `word-cuts` ending on an "anticipate" word into `impact-word`;
+- `marquee` → `impact-word`.

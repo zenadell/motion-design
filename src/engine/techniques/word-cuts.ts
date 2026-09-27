@@ -27,7 +27,7 @@ export default define({
   }),
   beats: { min: 0.5, max: 8, default: 1.5 },
   energy: 0,
-  example: { words: ['WE', 'BUILD', 'POWERFUL'], styles: ['split', 'diagonal', 'weight'] },
+  example: { words: ['IDEAS', 'DESERVE', 'MOTION'], styles: ['split', 'diagonal', 'weight'] },
   draw(g, lt, p, c) {
     const T = c.theme;
     const n = p.words.length, slot = c.dur / n;

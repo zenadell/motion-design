@@ -11,7 +11,7 @@ export default define({
   title: 'Swiss stack',
   category: 'type',
   summary: 'Two to four big lines stack in on the 8ths from alternating sides, each with a numbered rule, Swiss-poster style; then one line gets a solid highlight bar.',
-  guidance: 'Good for a phrase like "SOLUTIONS / THAT / TRANSFORM". Keep each line ≤ 12 characters. On brand tone it is a strong colour moment.',
+  guidance: 'Good for a three-line phrase like "IDEAS / INTO / MOTION". Keep each line ≤ 12 characters. On brand tone it is a strong colour moment.',
   label: 'TYPE',
   params: z.object({
     lines: z.array(z.string().min(1).max(14)).min(2).max(4),
@@ -20,7 +20,7 @@ export default define({
   }),
   beats: { min: 1.5, max: 4, default: 2 },
   energy: 2,
-  example: { lines: ['SOLUTIONS', 'THAT', 'TRANSFORM'] },
+  example: { lines: ['IDEAS', 'INTO', 'MOTION'] },
   draw(g, lt, p, c) {
     const b = c.bt, tn = tone(c, p.tone), n = p.lines.length;
     fillBg(g, tn.bg);

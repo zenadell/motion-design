@@ -50,9 +50,9 @@ A short statement delivered one word per slot, hard-cutting on the beat. Every w
   "beats": 1.5,
   "params": {
     "words": [
-      "WE",
-      "BUILD",
-      "POWERFUL"
+      "IDEAS",
+      "DESERVE",
+      "MOTION"
     ],
     "styles": [
       "split",
@@ -71,7 +71,7 @@ A short statement delivered one word per slot, hard-cutting on the beat. Every w
 
 One huge word slams in with RGB split and horizontal slice-glitches that re-shuffle on every 16th note, over scanlines and a glow. Reads as "digital / software / tech".
 
-**Guidance:** Use for the payoff word of a hook (e.g. SOFTWARE, DIGITAL, AI). 2 beats. A "blade" transition out of it looks great.
+**Guidance:** Use for the payoff word of a hook (e.g. SIGNAL, DIGITAL, LIVE). 2 beats. A "blade" transition out of it looks great.
 
 | param | type | default | notes |
 |---|---|---|---|
@@ -83,8 +83,8 @@ One huge word slams in with RGB split and horizontal slice-glitches that re-shuf
   "technique": "glitch-word",
   "beats": 2,
   "params": {
-    "word": "SOFTWARE",
-    "tag": "<Software />"
+    "word": "SIGNAL",
+    "tag": "<Signal />"
   }
 }
 ```
@@ -118,7 +118,7 @@ An anticipation squeeze on dark, then the word explodes onto the accent colour w
 
 A single large word whose letters drop in, then breathe through a travelling variable-weight wave. Optionally framed inside a browser window with a URL bar and an accent underline.
 
-**Guidance:** Great for one keyword per 2 beats (WEBSITES, PRODUCTS, IDEAS). Use frame "browser" when the word is about the web.
+**Guidance:** Great for one keyword per 2 beats (INTERFACES, PRODUCTS, IDEAS). Use frame "browser" when the word is about the web.
 
 | param | type | default | notes |
 |---|---|---|---|
@@ -134,8 +134,8 @@ A single large word whose letters drop in, then breathe through a travelling var
   "technique": "wave-word",
   "beats": 2,
   "params": {
-    "word": "WEBSITES",
-    "kicker": "WEB · MOBILE · SAAS · E-COMMERCE"
+    "word": "INTERFACES",
+    "kicker": "PRODUCT · BRAND · MOTION"
   }
 }
 ```
@@ -146,7 +146,7 @@ A single large word whose letters drop in, then breathe through a travelling var
 
 A very short word (1–3 letters, e.g. "AI") built from hundreds of glowing dots that scan in, ripple on every 8th note and flicker with neural-network links, plus an optional prefix and a suffix that slides in.
 
-**Guidance:** Made for AI / data / tech keywords. Keep `word` to 1–3 characters; put the rest in `suffix` (e.g. word "AI", suffix "-DRIVEN").
+**Guidance:** Made for AI / data / tech keywords. Keep `word` to 1–3 characters; put the rest in `suffix` (e.g. word "UX", prefix "+", suffix " FIRST").
 
 | param | type | default | notes |
 |---|---|---|---|
@@ -159,9 +159,9 @@ A very short word (1–3 letters, e.g. "AI") built from hundreds of glowing dots
   "technique": "dot-matrix-word",
   "beats": 2,
   "params": {
-    "word": "AI",
-    "prefix": "&",
-    "suffix": "-DRIVEN"
+    "word": "UX",
+    "prefix": "+",
+    "suffix": " FIRST"
   }
 }
 ```
@@ -172,7 +172,7 @@ A very short word (1–3 letters, e.g. "AI") built from hundreds of glowing dots
 
 Two to four big lines stack in on the 8ths from alternating sides, each with a numbered rule, Swiss-poster style; then one line gets a solid highlight bar.
 
-**Guidance:** Good for a phrase like "SOLUTIONS / THAT / TRANSFORM". Keep each line ≤ 12 characters. On brand tone it is a strong colour moment.
+**Guidance:** Good for a three-line phrase like "IDEAS / INTO / MOTION". Keep each line ≤ 12 characters. On brand tone it is a strong colour moment.
 
 | param | type | default | notes |
 |---|---|---|---|
@@ -186,9 +186,9 @@ Two to four big lines stack in on the 8ths from alternating sides, each with a n
   "beats": 2,
   "params": {
     "lines": [
-      "SOLUTIONS",
-      "THAT",
-      "TRANSFORM"
+      "IDEAS",
+      "INTO",
+      "MOTION"
     ]
   }
 }
@@ -200,7 +200,7 @@ Two to four big lines stack in on the 8ths from alternating sides, each with a n
 
 Letters of a big word card-flip one after another on the 32nds, changing colour as they turn; a sub-line slams in underneath; then the camera flies through one letter (e.g. the counter of an "O") into the next scene.
 
-**Guidance:** Ideal as the last type beat before a scene change (e.g. TRANSFORM / BUSINESSES.). Words containing O, D, Q, A or B make the best fly-through.
+**Guidance:** Ideal as the last type beat before a scene change (e.g. MOMENTUM / BY DESIGN.). Words containing O, D, Q, A or B make the best fly-through.
 
 | param | type | default | notes |
 |---|---|---|---|
@@ -214,8 +214,8 @@ Letters of a big word card-flip one after another on the 32nds, changing colour 
   "technique": "flip-word",
   "beats": 2,
   "params": {
-    "word": "TRANSFORM",
-    "subline": "BUSINESSES."
+    "word": "MOMENTUM",
+    "subline": "BY DESIGN."
   }
 }
 ```
@@ -292,13 +292,14 @@ A code editor floating in 3D: lines type in on the 8ths with syntax highlighting
   "beats": 4,
   "params": {
     "lines": [
-      "import { design, build, ship } from '@studio/core'",
+      "import { sketch, prototype } from '@northwind/kit'",
       "",
-      "const product = await build({",
-      "  web: 'next.js', ai: ['gemini', 'claude'],",
+      "const idea = sketch({ goal: \"clarity\" })",
+      "const app = await prototype(idea, {",
+      "  platforms: ['web', 'ios'],",
       "})",
       "",
-      "ship(product, { to: 'the world' })  // live in seconds"
+      "app.launch()  // day one"
     ]
   }
 }
@@ -328,17 +329,12 @@ The brand’s own website hero (nav, headline, CTA, rating, media tile, AI chat 
   "beats": 4,
   "params": {
     "headline": [
-      "We Build Powerful Software,",
-      "Websites & AI-Driven",
-      "Solutions."
+      "Design that moves,",
+      "products that ship."
     ],
-    "rating": {
-      "value": "4.9",
-      "label": "Trusted by businesses globally"
-    },
     "chat": {
-      "name": "Assistant",
-      "message": "What are we building today?"
+      "name": "Northwind",
+      "message": "What should we make next?"
     }
   }
 }
@@ -369,24 +365,24 @@ About a thousand glowing particles re-form into a new line-art icon on every bea
   "params": {
     "items": [
       {
-        "label": "WEB",
-        "desc": "React · Next.js · Node.js",
-        "icon": "web"
+        "label": "RESEARCH",
+        "desc": "Interviews · testing",
+        "icon": "search"
       },
       {
-        "label": "MOBILE",
-        "desc": "Cross-platform apps",
-        "icon": "mobile"
+        "label": "PRODUCT",
+        "desc": "Apps & platforms",
+        "icon": "layers"
       },
       {
-        "label": "AI",
-        "desc": "Assistants & automation",
-        "icon": "ai"
+        "label": "MOTION",
+        "desc": "Brands in movement",
+        "icon": "motion"
       },
       {
-        "label": "BRANDING",
-        "desc": "Visual identity",
-        "icon": "brand"
+        "label": "LAUNCH",
+        "desc": "Go-to-market",
+        "icon": "rocket"
       }
     ]
   }
@@ -462,7 +458,7 @@ A full 3D camera showcase: a horizon line becomes a perspective grid, the camera
 
 A 3D dotted-world globe spins in, the camera pushes in on the HQ pin, then glowing arcs launch to each client city on the 8ths with data packets pulsing out on every beat, while a two-line headline swaps. Ends by spinning away into a point.
 
-**Guidance:** Give real coordinates. 5–8 cities read best in 8 beats. headline e.g. ["Based in", "Nigeria."] then headline2 ["Building for", "the world."].
+**Guidance:** Give real coordinates. 5–8 cities read best in 8 beats. headline e.g. ["Made in", "Lisbon."] then headline2 ["Shipped", "everywhere."].
 
 | param | type | default | notes |
 |---|---|---|---|
@@ -481,39 +477,39 @@ A 3D dotted-world globe spins in, the camera pushes in on the HQ pin, then glowi
   "beats": 8,
   "params": {
     "hq": {
-      "name": "NIGERIA",
-      "lat": 9.08,
-      "lon": 8.2
+      "name": "LISBON",
+      "lat": 38.72,
+      "lon": -9.14
     },
     "cities": [
       {
-        "name": "LONDON",
-        "lat": 51.5,
-        "lon": -0.13
+        "name": "BERLIN",
+        "lat": 52.52,
+        "lon": 13.4
       },
       {
-        "name": "NEW YORK",
-        "lat": 40.7,
-        "lon": -74
+        "name": "TORONTO",
+        "lat": 43.65,
+        "lon": -79.38
       },
       {
-        "name": "DUBAI",
-        "lat": 25.2,
-        "lon": 55.3
+        "name": "TOKYO",
+        "lat": 35.68,
+        "lon": 139.69
       },
       {
-        "name": "SINGAPORE",
-        "lat": 1.35,
-        "lon": 103.8
+        "name": "SYDNEY",
+        "lat": -33.87,
+        "lon": 151.21
       }
     ],
     "headline": [
-      "Based in",
-      "Nigeria."
+      "Made in",
+      "Lisbon."
     ],
     "headline2": [
-      "Building for",
-      "the world."
+      "Shipped",
+      "everywhere."
     ]
   }
 }
@@ -540,19 +536,19 @@ Project or client names flash one per 16th note, each in a different colourway a
   "params": {
     "items": [
       {
-        "title": "CHAKA AI",
-        "tag": "AI platform"
+        "title": "ATLAS",
+        "tag": "Fintech app"
       },
       {
-        "title": "ZYRO",
-        "tag": "SaaS landing"
+        "title": "KESTREL",
+        "tag": "Brand system"
       },
       {
-        "title": "RENOK",
-        "tag": "Identity system"
+        "title": "LUMEN",
+        "tag": "AI assistant"
       },
       {
-        "title": "MORAE",
+        "title": "ORBIT",
         "tag": "E-commerce"
       }
     ]
@@ -566,7 +562,7 @@ Project or client names flash one per 16th note, each in a different colourway a
 
 A big number rolls up digit-by-digit like an odometer, star ratings pop in on the 32nds, with a caption; optionally the brand blade grows across the frame at the end to build tension into the next section.
 
-**Guidance:** Use real numbers only (rating, clients, years, uptime). `value` like "4.9", "120+", "98%". Put it right before the logo reveal with tension on and energy 3 (the music builds and drops out).
+**Guidance:** Use real numbers only (rating, clients, years, uptime). `value` shaped like "4.9", "120+" or "98%" (but only a number the brand actually states). Put it right before the logo reveal with tension on and energy 3 (the music builds and drops out).
 
 | param | type | default | notes |
 |---|---|---|---|
@@ -580,9 +576,8 @@ A big number rolls up digit-by-digit like an odometer, star ratings pop in on th
   "technique": "stat-odometer",
   "beats": 2,
   "params": {
-    "value": "4.9",
-    "stars": 5,
-    "label": "Trusted by businesses globally"
+    "value": "120+",
+    "label": "Products shipped"
   }
 }
 ```

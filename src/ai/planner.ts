@@ -82,6 +82,11 @@ export class Planner {
     return this.loop('plan');
   }
 
+  /** The conversation so far (user prompts and raw model replies), for audit. */
+  transcript(): { role: string; text: string }[] {
+    return this.turns.map(t => ({ role: t.role, text: t.parts.map(p => ('text' in p ? p.text : `[image ${p.image.mime}]`)).join('\n') }));
+  }
+
   revise(feedback: string): Promise<PlanResult> {
     if (!this.turns.length) throw new Error('draft() first');
     this.turns.push(user(feedback));

@@ -12,7 +12,7 @@ export default define({
   title: 'Weight-wave word',
   category: 'type',
   summary: 'A single large word whose letters drop in, then breathe through a travelling variable-weight wave. Optionally framed inside a browser window with a URL bar and an accent underline.',
-  guidance: 'Great for one keyword per 2 beats (WEBSITES, PRODUCTS, IDEAS). Use frame "browser" when the word is about the web.',
+  guidance: 'Great for one keyword per 2 beats (INTERFACES, PRODUCTS, IDEAS). Use frame "browser" when the word is about the web.',
   label: 'TYPE',
   params: z.object({
     word: z.string().min(2).max(12),
@@ -24,7 +24,7 @@ export default define({
   }),
   beats: { min: 1, max: 4, default: 2 },
   energy: 2,
-  example: { word: 'WEBSITES', kicker: 'WEB · MOBILE · SAAS · E-COMMERCE' },
+  example: { word: 'INTERFACES', kicker: 'PRODUCT · BRAND · MOTION' },
   draw(g, lt, p, c) {
     const T = c.theme, b = c.bt, tn = tone(c, p.tone);
     fillBg(g, tn.bg);

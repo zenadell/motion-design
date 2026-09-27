@@ -71,10 +71,10 @@ export default define({
   energy: 2,
   example: {
     items: [
-      { label: 'WEB', desc: 'React · Next.js · Node.js', icon: 'web' },
-      { label: 'MOBILE', desc: 'Cross-platform apps', icon: 'mobile' },
-      { label: 'AI', desc: 'Assistants & automation', icon: 'ai' },
-      { label: 'BRANDING', desc: 'Visual identity', icon: 'brand' },
+      { label: 'RESEARCH', desc: 'Interviews · testing', icon: 'search' },
+      { label: 'PRODUCT', desc: 'Apps & platforms', icon: 'layers' },
+      { label: 'MOTION', desc: 'Brands in movement', icon: 'motion' },
+      { label: 'LAUNCH', desc: 'Go-to-market', icon: 'rocket' },
     ],
   },
   draw(g, lt, p, c) {

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { blip, whoosh } from '../audio/synth';
-import { fillBg, glow, makeLayer, W } from '../core/draw';
+import { fillBg, fitFont, glow, makeLayer, W } from '../core/draw';
 import { E, prog, pulse, rnd, TAU } from '../core/math';
 import { font } from '../core/theme';
 import { beatPulse, cap } from './_shared';
@@ -30,7 +30,7 @@ export default define({
   title: 'Dot-matrix word',
   category: 'type',
   summary: 'A very short word (1–3 letters, e.g. "AI") built from hundreds of glowing dots that scan in, ripple on every 8th note and flicker with neural-network links, plus an optional prefix and a suffix that slides in.',
-  guidance: 'Made for AI / data / tech keywords. Keep `word` to 1–3 characters; put the rest in `suffix` (e.g. word "AI", suffix "-DRIVEN").',
+  guidance: 'Made for AI / data / tech keywords. Keep `word` to 1–3 characters; put the rest in `suffix` (e.g. word "UX", prefix "+", suffix " FIRST").',
   label: 'TYPE',
   params: z.object({
     word: z.string().min(1).max(3),
@@ -39,7 +39,7 @@ export default define({
   }),
   beats: { min: 1, max: 4, default: 2 },
   energy: 2,
-  example: { word: 'AI', prefix: '&', suffix: '-DRIVEN' },
+  example: { word: 'UX', prefix: '+', suffix: ' FIRST' },
   draw(g, lt, p, c) {
     const T = c.theme, b = c.bt;
     fillBg(g, T.bg);
@@ -73,8 +73,10 @@ export default define({
     if (p.suffix) {
       const dp = E.outExpo(prog(lt, b(1), b(1.44)));
       if (dp > 0) {
-        font(g, Math.min(210, (W - (ox + D.w + 110)) / Math.max(1, p.suffix.length) * 1.6), 300); g.fillStyle = T.text;
-        g.fillText(p.suffix, ox + D.w + 70 + (1 - dp) * 900, oy + 760);
+        // measure, so any suffix up to 12 characters stays inside the frame
+        const x = ox + D.w + 70, size = Math.max(56, Math.min(210, fitFont(g, p.suffix, W - x - 90, 300)));
+        font(g, size, 300); g.fillStyle = T.text;
+        g.fillText(p.suffix, x + (1 - dp) * 900, oy + 760);
       }
     }
     cap(g, c, ['DOT-MATRIX TYPE', 'RIPPLE ON THE 8THS'], 'tr', T.bg);

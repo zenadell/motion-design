@@ -180,6 +180,8 @@ export interface BrandResult {
   scrape: ScrapeResult;
   logo: { source: string; kind: string } | null;
   usage: Usage[];
+  /** The model's raw reply. */
+  raw: string;
 }
 
 export function brandPrompt(s: ScrapeResult): Part[] {
@@ -216,5 +218,5 @@ export async function extractBrand(url: string, llm: LLM, o: BrandOptions = {}):
     if (l && raster) { kit.brand.logo = l; logo = { source: raster.candidate.src ?? `inline svg #${idx}`, kind }; }
   }
   log(`  ${kit.brand.name}${kit.brand.suffix ? ` ${kit.brand.suffix}` : ''} · ${kit.brand.colors.primary} on ${kit.brand.colors.bg} · ${kit.brand.fonts.display} · ${logo ? `logo (${logo.kind})` : 'monogram'}`);
-  return { kit, scrape, logo, usage: [reply.usage] };
+  return { kit, scrape, logo, usage: [reply.usage], raw: reply.text };
 }

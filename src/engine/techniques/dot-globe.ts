@@ -57,16 +57,16 @@ export default define({
   title: 'Dot globe — HQ to the world',
   category: 'data',
   summary: 'A 3D dotted-world globe spins in, the camera pushes in on the HQ pin, then glowing arcs launch to each client city on the 8ths with data packets pulsing out on every beat, while a two-line headline swaps. Ends by spinning away into a point.',
-  guidance: 'Give real coordinates. 5–8 cities read best in 8 beats. headline e.g. ["Based in", "Nigeria."] then headline2 ["Building for", "the world."].',
+  guidance: 'Give real coordinates. 5–8 cities read best in 8 beats. headline e.g. ["Made in", "Lisbon."] then headline2 ["Shipped", "everywhere."].',
   label: 'GLOBAL',
   params: Params,
   beats: { min: 6, max: 12, default: 8 },
   energy: 2,
   example: {
-    hq: { name: 'NIGERIA', lat: 9.08, lon: 8.2 },
-    cities: [{ name: 'LONDON', lat: 51.5, lon: -0.13 }, { name: 'NEW YORK', lat: 40.7, lon: -74 }, { name: 'DUBAI', lat: 25.2, lon: 55.3 }, { name: 'SINGAPORE', lat: 1.35, lon: 103.8 }],
-    headline: ['Based in', 'Nigeria.'],
-    headline2: ['Building for', 'the world.'],
+    hq: { name: 'LISBON', lat: 38.72, lon: -9.14 },
+    cities: [{ name: 'BERLIN', lat: 52.52, lon: 13.4 }, { name: 'TORONTO', lat: 43.65, lon: -79.38 }, { name: 'TOKYO', lat: 35.68, lon: 139.69 }, { name: 'SYDNEY', lat: -33.87, lon: 151.21 }],
+    headline: ['Made in', 'Lisbon.'],
+    headline2: ['Shipped', 'everywhere.'],
   },
   draw(g, lt, p, c) {
     const T = c.theme, b = c.bt, V = view(lt, p, c);

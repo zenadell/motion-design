@@ -35,7 +35,7 @@ export interface MakeResult {
   kit: BrandKit;
   usage: Usage[];
   reviews: Critique[];
-  files: { brand: string; plan: string; sheet: string; html: string; report: string; video?: string };
+  files: { brand: string; plan: string; sheet: string; html: string; report: string; transcript: string; video?: string };
 }
 
 export async function make(llm: LLM, o: MakeOptions): Promise<MakeResult> {
@@ -45,6 +45,8 @@ export async function make(llm: LLM, o: MakeOptions): Promise<MakeResult> {
   const f = (n: string) => join(dir, n);
   const usage: Usage[] = [];
   const t0 = Date.now();
+  // every raw model reply, in order, so a run can be audited afterwards
+  const audit: { step: string; model: string; at: string; reply?: string; conversation?: { role: string; text: string }[] }[] = [];
   const browser = await launch();
   try {
     // 1. brand
@@ -56,6 +58,7 @@ export async function make(llm: LLM, o: MakeOptions): Promise<MakeResult> {
       log('1/4 brand');
       const b = await extractBrand(o.url!, llm, { browser, logoFile: o.logoFile, log });
       usage.push(...b.usage);
+      audit.push({ step: 'brand', model: llm.model, at: new Date().toISOString(), reply: b.raw });
       kit = b.kit;
       writeFileSync(f('screenshot.jpg'), b.scrape.screenshot);
     }
@@ -77,6 +80,7 @@ export async function make(llm: LLM, o: MakeOptions): Promise<MakeResult> {
       log(`3/4 review${o.qaRounds && o.qaRounds > 1 ? ` ${r + 1}` : ''}`);
       const rv = await review(llm, plan, kit, { browser, log });
       usage.push(rv.usage);
+      audit.push({ step: `review ${r + 1}`, model: llm.model, at: new Date().toISOString(), reply: rv.raw });
       reviews.push(rv.critique);
       writeFileSync(f(`review-${r + 1}.json`), JSON.stringify(rv.critique, null, 2));
       log(`  ${rv.critique.score}/10 · ${rv.critique.issues.length} issue(s)${rv.critique.summary ? ` · ${rv.critique.summary.slice(0, 140)}` : ''}`);
@@ -93,6 +97,8 @@ export async function make(llm: LLM, o: MakeOptions): Promise<MakeResult> {
       writeFileSync(f('plan.json'), JSON.stringify(plan, null, 2));
     }
     usage.push(...planner.usage);
+    audit.push({ step: 'planning conversation (system prompt omitted)', model: llm.model, at: new Date().toISOString(), conversation: planner.transcript() });
+    writeFileSync(f('transcript.json'), JSON.stringify(audit, null, 2));
 
     // 4. outputs
     log('4/4 outputs');
@@ -109,7 +115,7 @@ export async function make(llm: LLM, o: MakeOptions): Promise<MakeResult> {
       log(`  rendered ${v.frames} frames in ${v.seconds.toFixed(0)} s`);
     }
 
-    const files = { brand: f('brand.json'), plan: f('plan.json'), sheet: f('sheet.png'), html: f('reel.html'), report: f('report.json'), ...(video ? { video } : {}) };
+    const files = { brand: f('brand.json'), plan: f('plan.json'), sheet: f('sheet.png'), html: f('reel.html'), report: f('report.json'), transcript: f('transcript.json'), ...(video ? { video } : {}) };
     const seconds = plan.sections.reduce((a, s) => a + s.beats, 0) * (60 / plan.music.bpm);
     writeFileSync(files.report, JSON.stringify({
       source: o.url ?? o.brandFile, brief: o.brief, model: llm.model, concept,

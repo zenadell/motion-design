@@ -1,5 +1,4 @@
 import guide from '../../docs/authoring-guide.md?raw';
-import jomiez from '../../examples/jomiez.plan.json';
 import { catalogJson, catalogMarkdown } from '../cli/catalog';
 import type { Issue } from '../plan/validate';
 import type { BrandKit } from './brand-kit';
@@ -19,22 +18,18 @@ export function plannerSystem(): string {
 ## Hard rules
 1. LENGTH: the sections' beats must add up to exactly the target number of beats. Use multiples of 0.25 and stay inside each technique's beat range.
 2. ARC: open with a hook (blade-open → word-cuts, or glitch-word / impact-word). End with end-card for a company or signature-card for a person. Build → proof → payoff in between, as the authoring guide describes.
-3. FACTS: state only facts that appear in the BRIEF or the BRAND FACTS. That covers names of clients, projects, products and places, and every number (stats, ratings, years, counts). If a data technique (dot-globe, montage, stat-odometer, the rating in exploded-ui) has no real facts to show, leave it out. The catalog examples and the reference plan show the FORMAT only; their copy (Jomiez, Nigeria, CHAKA AI, 4.9, …) belongs to another company and must never appear in your plan.
+3. FACTS: state only facts that appear in the BRIEF or the BRAND FACTS. That covers names of clients, projects, products and places, and every number (stats, ratings, years, counts). If a data technique (dot-globe, montage, stat-odometer, the rating in exploded-ui) has no real facts to show, leave it out. The catalog examples show the FORMAT only; their copy (Northwind, Lisbon, ATLAS, 120+, …) belongs to a fictional company and must never appear in your plan.
 4. COPY: respect every character and item limit. Big type is 1–2 words, uppercase unless the technique says otherwise. Write in the brand's voice, from its own claims and services. No lorem ipsum, no placeholders, no emoji.
 5. SCHEMA: technique ids and param names exactly as in the catalog. Don't invent params; omit params you don't need (defaults are good).
 6. VARIETY: never the same technique twice in a row; one idea per section; alternate dark, light and brand-coloured backgrounds; use the continuity pairs from the guide where they fit.
+7. ORIGINALITY: design this piece for this brand and this brief. The guide's shapes are starting points, not templates. Choose the hook, the order and the techniques from what the brand actually offers, and write the copy in its own words.
 
 # Authoring guide
 ${guide}
 
 # Technique catalog
 ${catalogMarkdown()}
-
-# Reference plan
-For format and pacing only. It belongs to another brand: do not reuse any of its copy.
-\`\`\`json
-${JSON.stringify({ music: jomiez.music, sections: jomiez.sections })}
-\`\`\``);
+`);
 }
 
 export interface PlanTarget {

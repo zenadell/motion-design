@@ -11,7 +11,7 @@ export default define({
   title: 'Card-flip word + fly-through',
   category: 'type',
   summary: 'Letters of a big word card-flip one after another on the 32nds, changing colour as they turn; a sub-line slams in underneath; then the camera flies through one letter (e.g. the counter of an "O") into the next scene.',
-  guidance: 'Ideal as the last type beat before a scene change (e.g. TRANSFORM / BUSINESSES.). Words containing O, D, Q, A or B make the best fly-through.',
+  guidance: 'Ideal as the last type beat before a scene change (e.g. MOMENTUM / BY DESIGN.). Words containing O, D, Q, A or B make the best fly-through.',
   label: 'TYPE',
   params: z.object({
     word: z.string().min(2).max(12),
@@ -21,7 +21,7 @@ export default define({
   }),
   beats: { min: 1.5, max: 4, default: 2 },
   energy: 2,
-  example: { word: 'TRANSFORM', subline: 'BUSINESSES.' },
+  example: { word: 'MOMENTUM', subline: 'BY DESIGN.' },
   draw(g, lt, p, c) {
     const T = c.theme, b = c.bt;
     fillBg(g, T.bg);

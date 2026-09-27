@@ -11,7 +11,7 @@ export default define({
   title: 'Stat odometer',
   category: 'data',
   summary: 'A big number rolls up digit-by-digit like an odometer, star ratings pop in on the 32nds, with a caption; optionally the brand blade grows across the frame at the end to build tension into the next section.',
-  guidance: 'Use real numbers only (rating, clients, years, uptime). `value` like "4.9", "120+", "98%". Put it right before the logo reveal with tension on and energy 3 (the music builds and drops out).',
+  guidance: 'Use real numbers only (rating, clients, years, uptime). `value` shaped like "4.9", "120+" or "98%" (but only a number the brand actually states). Put it right before the logo reveal with tension on and energy 3 (the music builds and drops out).',
   label: 'PROOF',
   params: z.object({
     value: z.string().min(1).max(6).regex(/\d/, 'must contain at least one digit'),
@@ -21,7 +21,7 @@ export default define({
   }),
   beats: { min: 1, max: 4, default: 2 },
   energy: 1,
-  example: { value: '4.9', stars: 5, label: 'Trusted by businesses globally' },
+  example: { value: '120+', label: 'Products shipped' },
   draw(g, lt, p, c) {
     const T = c.theme, b = c.bt;
     fillBg(g, T.bg);

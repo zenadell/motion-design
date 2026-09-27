@@ -12,7 +12,7 @@ export default define({
   title: 'Glitch impact word',
   category: 'type',
   summary: 'One huge word slams in with RGB split and horizontal slice-glitches that re-shuffle on every 16th note, over scanlines and a glow. Reads as "digital / software / tech".',
-  guidance: 'Use for the payoff word of a hook (e.g. SOFTWARE, DIGITAL, AI). 2 beats. A "blade" transition out of it looks great.',
+  guidance: 'Use for the payoff word of a hook (e.g. SIGNAL, DIGITAL, LIVE). 2 beats. A "blade" transition out of it looks great.',
   label: 'INTRO',
   params: z.object({
     word: z.string().min(1).max(12),
@@ -20,7 +20,7 @@ export default define({
   }),
   beats: { min: 1, max: 4, default: 2 },
   energy: 0,
-  example: { word: 'SOFTWARE', tag: '<Software />' },
+  example: { word: 'SIGNAL', tag: '<Signal />' },
   draw(g, lt, p, c) {
     const T = c.theme, b = c.bt;
     fillBg(g, T.bg);

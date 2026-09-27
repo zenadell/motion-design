@@ -36,7 +36,7 @@ export default define({
   }),
   beats: { min: 1, max: 8, default: 2 },
   energy: 1,
-  example: { items: [{ title: 'CHAKA AI', tag: 'AI platform' }, { title: 'ZYRO', tag: 'SaaS landing' }, { title: 'RENOK', tag: 'Identity system' }, { title: 'MORAE', tag: 'E-commerce' }] },
+  example: { items: [{ title: 'ATLAS', tag: 'Fintech app' }, { title: 'KESTREL', tag: 'Brand system' }, { title: 'LUMEN', tag: 'AI assistant' }, { title: 'ORBIT', tag: 'E-commerce' }] },
   draw(g, lt, p, c) {
     const n = p.items.length, i = clamp(Math.floor(lt / c.bt(p.every)), 0, n - 1), it = lt - i * c.bt(p.every);
     const st = styles(c)[i % 8], name = p.items[i].title;

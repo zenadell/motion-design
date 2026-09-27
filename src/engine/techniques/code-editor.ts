@@ -101,7 +101,7 @@ export default define({
   beats: { min: 3, max: 8, default: 4 },
   energy: 2,
   example: {
-    lines: ["import { design, build, ship } from '@studio/core'", '', 'const product = await build({', "  web: 'next.js', ai: ['gemini', 'claude'],", '})', '', "ship(product, { to: 'the world' })  // live in seconds"],
+    lines: ["import { sketch, prototype } from '@northwind/kit'", '', 'const idea = sketch({ goal: "clarity" })', 'const app = await prototype(idea, {', "  platforms: ['web', 'ios'],", '})', '', 'app.launch()  // day one'],
   },
   draw(g, lt, p, c) {
     const T = c.theme, b = c.bt;

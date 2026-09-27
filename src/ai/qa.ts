@@ -96,7 +96,7 @@ export async function review(llm: LLM, plan: Plan, kit: BrandKit, o: { browser?:
       summary: String(c.summary ?? ''),
       issues: (Array.isArray(c.issues) ? c.issues : []).filter(i => i && typeof i.problem === 'string'),
     };
-    return { critique, usage: reply.usage, frames: frames.length, errors: reel.errors };
+    return { critique, usage: reply.usage, frames: frames.length, errors: reel.errors, raw: reply.text };
   } finally {
     if (o.browser) await reel.page.context().close();
     else await reel.close();
