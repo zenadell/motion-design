@@ -11,6 +11,8 @@ export interface ReelAPI {
   sections: Engine['sections'];
   frame(i: number, sub?: number): string;
   still(t: number, sub?: number): string;
+  /** A scaled-down JPEG of the frame at `t` (for vision-model review). */
+  thumb(t: number, width?: number, sub?: number): string;
   render(t: number, sub?: number): void;
   sheet(times: number[], cols?: number, sub?: number): string;
   wav(): Promise<string>;
@@ -165,6 +167,13 @@ export function startPlayer(engine: Engine): void {
     sections: engine.sections,
     frame(i, sub = 6) { engine.renderFrame(g, i / engine.fps, sub); return canvas.toDataURL('image/png'); },
     still(t, sub = 1) { engine.renderFrame(g, t, sub); return canvas.toDataURL('image/png'); },
+    thumb(t, width = 960, sub = 1) {
+      engine.renderFrame(g, t, sub);
+      const c = document.createElement('canvas');
+      c.width = width; c.height = Math.round((width * H) / W);
+      c.getContext('2d')!.drawImage(canvas, 0, 0, c.width, c.height);
+      return c.toDataURL('image/jpeg', 0.85);
+    },
     render(t, sub = 1) { engine.renderFrame(g, t, sub); },
     sheet(times, cols = 3, sub = 1) {
       const cw = 640, ch = 360, lab = 30, rows = Math.ceil(times.length / cols);

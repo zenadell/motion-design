@@ -4,11 +4,16 @@ Beat-synced motion design videos from a JSON plan.
 
 You describe **what** happens: sections, copy, brand colours, music. The engine decides **how** it looks and sounds. That covers kinetic typography, particle morphs, a 3D camera, a dot globe, logo builds, transitions, film grain, motion blur, and a synthesized soundtrack whose every hit lands on the cut.
 
-The plan is small and strictly validated, so it's easy for a person or a language model to write. This repo is **phase 1** of a platform where a model (e.g. Gemini) writes the plan and this engine renders it. See [docs/architecture.md](docs/architecture.md#roadmap).
+The plan is small and strictly validated, so it's easy for a person or a language model to write. The **AI director** (Gemini 3.8 Flash by default) writes it for you from a website and a brief. See [docs/ai-pipeline.md](docs/ai-pipeline.md).
 
 ```
-plan.json ──► validate ──► engine (canvas + Web Audio, deterministic) ──► HTML player
-                                                                     └──► MP4 (1080p60, motion blur, AAC)
+website ──► brand kit ──► plan ──► validate ⇄ repair ──► visual review ⇄ revise ──► engine ──► MP4
+          (Gemini)      (Gemini)   (code)                 (Gemini vision)          (canvas + Web Audio, deterministic)
+```
+
+```bash
+export GEMINI_API_KEY=...        # https://aistudio.google.com/apikey
+motion make https://jomiez.com --brief "A confident showreel for our software studio" --seconds 20 -o out/jomiez
 ```
 
 ## Quick start
@@ -42,6 +47,12 @@ Open the HTML file in any modern browser and press **Play**. It is a single offl
 - **Brand theming:** colours and fonts come from the plan. Missing colours are derived automatically, and a brand without a logo gets a traced monogram.
 - **Renderer:** headless Chromium drives the deterministic engine frame by frame across parallel workers, with motion-blur accumulation and ffmpeg encoding.
 - **QA tooling:** labelled contact sheets (`stills`), a render-every-technique smoke test (`gallery`), and a machine-readable catalog with JSON Schemas (`catalog --json`).
+- **AI director:**
+  - brand extraction from a URL (colours, fonts, facts, and a vector logo traced from the site);
+  - a planner that repairs its own plans against the validator;
+  - a fact check that blocks invented numbers and names;
+  - a vision review of rendered frames that sends fixes back to the planner;
+  - a cost report for every run.
 
 ## CLI
 
@@ -53,6 +64,14 @@ motion render   <plan.json> [-o out.mp4] [--crf 18] [--workers N] [--blur 6] [--
 motion audio    <plan.json> [-o out.wav]
 motion catalog  [--json | --md]
 motion gallery  [-o dir] [--quick] [--only id,id]
+
+# AI director (GEMINI_API_KEY)
+motion make     <url> --brief "..." [--seconds 20] [--genre g] [--logo mark.svg] [--qa 1] [-o dir]
+motion brand    <url> [-o brand.json]
+motion plan     --brand brand.json --brief "..." [--seconds 20] [-o plan.json]
+motion review   <plan.json> [--brand brand.json]
+motion models
+motion scrape   <url> [-o dir]
 ```
 
 `MOTION_CHROMIUM_PATH` and `MOTION_FFMPEG_PATH` override the browser and ffmpeg binaries.
@@ -79,7 +98,7 @@ motion gallery  [-o dir] [--quick] [--only id,id]
 }
 ```
 
-The full format is in [docs/plan-format.md](docs/plan-format.md), and the creative rules for writing good plans are in [docs/authoring-guide.md](docs/authoring-guide.md). The two examples in [`examples/`](examples) reproduce the Jomiez Innovation showreel (26 s) and the résumé reel (15 s).
+The full format is in [docs/plan-format.md](docs/plan-format.md), and the creative rules for writing good plans are in [docs/authoring-guide.md](docs/authoring-guide.md). The planner model gets that same guide as its instructions. The two examples in [`examples/`](examples) reproduce the Jomiez Innovation showreel (26 s) and the résumé reel (15 s).
 
 ## Development
 

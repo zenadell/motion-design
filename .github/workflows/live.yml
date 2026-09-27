@@ -1,0 +1,59 @@
+name: Live (Gemini)
+
+# Runs the real pipeline against Gemini: website → brand → plan → review → MP4.
+# Needs a repository secret named GEMINI_API_KEY.
+# Start it from the Actions tab, or add the "live-test" label to a pull request.
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: Website to make a video for
+        default: https://jomiez.com
+      brief:
+        description: What the video should say
+        default: A confident brand showreel that shows what we build and ends on our logo.
+      seconds:
+        description: Length in seconds
+        default: '20'
+      model:
+        description: Gemini model id
+        default: gemini-3.8-flash
+  pull_request:
+    types: [labeled]
+
+jobs:
+  make:
+    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'live-test'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      URL: ${{ inputs.url || 'https://jomiez.com' }}
+      BRIEF: ${{ inputs.brief || 'A confident brand showreel that shows what we build and ends on our logo.' }}
+      SECONDS_: ${{ inputs.seconds || '20' }}
+      MODEL: ${{ inputs.model || 'gemini-3.8-flash' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build
+      - name: Check the key
+        run: |
+          if [ -z "$GEMINI_API_KEY" ]; then echo "::error::Add a repository secret named GEMINI_API_KEY (Settings → Secrets and variables → Actions)"; exit 1; fi
+      - name: Models this key can use
+        run: node dist/cli.js models
+      - name: Make the video
+        run: node dist/cli.js make "$URL" --brief "$BRIEF" --seconds "$SECONDS_" --model "$MODEL" --workers 4 -o out/live
+      - name: Report
+        if: always()
+        run: cat out/live/report.json || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: live-video
+          path: out/live

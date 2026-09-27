@@ -4,6 +4,7 @@ import { formatIssues, validatePlan } from '../plan/validate';
 import type { Plan } from '../plan/schema';
 import { dataUrlToBuffer, openReel } from './browser';
 import { catalogJson, catalogMarkdown } from './catalog';
+import { runAi } from './ai';
 import { gallery } from './gallery';
 import { buildHtml } from './html';
 import { autoTimes, renderAudio, renderVideo } from './render';
@@ -21,7 +22,25 @@ usage:
   motion catalog  [--json | --md]                technique catalog (the planner's reference)
   motion gallery  [-o dir] [--quick] [--only id,id]
                                                  contact sheet of every technique (smoke test)
+
+AI director (needs GEMINI_API_KEY; model: gemini-3.8-flash, override with --model or MOTION_MODEL):
+  motion make     <url> --brief "..." [--seconds 20] [--genre afro-house|electro] [--bpm 120]
+                  [--logo mark.svg] [--brand brand.json] [--qa 1 | --no-qa] [--no-render] [-o dir]
+                                                 website → brand kit → plan → visual review → MP4
+  motion brand    <url> [--logo mark.svg] [-o brand.json]
+                                                 extract colours, fonts, facts and the logo mark
+  motion plan     --brand brand.json --brief "..." [--seconds 20] [--genre g] [--effort low|medium|high] [-o plan.json]
+                                                 write a plan (validated and repaired automatically)
+  motion review   <plan.json> [--brand brand.json] [-o dir]
+                                                 vision-model critique of rendered frames
+  motion models                                  models your key can use
+  motion scrape   <url> [--mark #FFFFFF] [-o dir]
+                                                 what the brand extractor sees (no model call)
+
+  --brief accepts @file.txt · --replay replies.json plays back recorded model replies (tests, no key)
 `;
+
+const VALUE_FLAGS = ['at', 'crf', 'workers', 'blur', 'from', 'to', 'only', 'brand', 'brief', 'seconds', 'bpm', 'genre', 'model', 'logo', 'effort', 'qa', 'mark', 'replay'];
 
 function parse(argv: string[]) {
   const pos: string[] = [], flags: Record<string, string | true> = {};
@@ -30,7 +49,7 @@ function parse(argv: string[]) {
     if (a === '-o') flags.o = argv[++i];
     else if (a.startsWith('--')) {
       const k = a.slice(2), v = argv[i + 1];
-      if (v !== undefined && !v.startsWith('-') && ['at', 'crf', 'workers', 'blur', 'from', 'to', 'only'].includes(k)) { flags[k] = v; i++; }
+      if (v !== undefined && !v.startsWith('-') && VALUE_FLAGS.includes(k)) { flags[k] = v; i++; }
       else flags[k] = true;
     } else pos.push(a);
   }
@@ -139,6 +158,7 @@ async function main(): Promise<void> {
       return;
     }
     default:
+      if (cmd && (await runAi(cmd, pos, flags))) return;
       process.stdout.write(HELP);
       if (cmd && cmd !== 'help' && cmd !== '--help' && cmd !== '-h') process.exit(1);
   }

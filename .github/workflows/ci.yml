@@ -41,6 +41,11 @@ jobs:
         run: |
           node dist/cli.js stills examples/jomiez.plan.json -o out/jomiez-stills --sheet
           node dist/cli.js stills examples/resume-reel.plan.json -o out/resume-stills --sheet
+      - name: AI pipeline end to end on a fixture site (recorded model replies)
+        run: |
+          node dist/cli.js make "file://$PWD/test/fixtures/site/index.html" --brief "Launch reel" --seconds 16 --qa 2 \
+            --replay test/fixtures/replay-kora.json --no-render -o out/make-kora
+          node dist/cli.js validate out/make-kora/plan.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -48,3 +53,4 @@ jobs:
           path: |
             out/gallery
             out/*-stills/sheet.png
+            out/make-kora

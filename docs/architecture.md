@@ -15,12 +15,27 @@ src/
     render.ts           frame composition: sections, transitions, shake, motion blur, HUD, grain, soundtrack
     player.ts           interactive playback + window.__reel automation API
     index.ts            MotionEngine.boot({ plan, land })
+  ai/                   the AI director (Node)
+    llm.ts              provider interface, JSON extraction, usage + cost
+    gemini.ts           Gemini via @google/genai (structured output, thinking level, retries)
+    schema.ts           Gemini-subset JSON Schemas (one branch per technique)
+    prompts.ts          planner / brand / critic prompts (the planner gets the authoring guide + catalog)
+    planner.ts          draft → validate → lint → repair loop; revise() for review feedback
+    lint.ts             length fitting, arc, variety, fact check against the brief + brand facts
+    brand-kit.ts        brand + facts the planner may state
+    scrape.ts           headless site reading: screenshot, colours, fonts, copy, logo candidates
+    vectorize.ts        raster logo → SVG path (pixel-edge tracing, tile + wordmark handling)
+    brand.ts            scrape + Gemini → brand kit, colour/contrast rules, logo choice
+    qa.ts               settled frames → Gemini vision critique → revision brief
+    pipeline.ts         make(): brand → plan → review → outputs + report
+    replay.ts           recorded replies instead of a model (tests, CI)
   cli/                  Node: bundled to dist/cli.js
     html.ts             single-file HTML (fonts/engine/plan/land inlined)
     browser.ts          headless Chromium via Playwright
     render.ts           parallel frame rendering → ffmpeg (H.264 + AAC)
     catalog.ts          JSON Schema + Markdown catalog for planners
     gallery.ts          smoke test: contact sheet of every technique
+    ai.ts               make / brand / plan / review / models / scrape commands
 ```
 
 ## Principles
@@ -69,13 +84,13 @@ Then add it to `techniques/index.ts`. The catalog, docs, validation, gallery and
 
 ## Roadmap
 
-**Phase 1 (this repo):** the engine, the technique library, the plan contract, the CLI renderer, and QA tooling.
+**Phase 1 (done):** the engine, the technique library, the plan contract, the CLI renderer, and QA tooling.
 
-**Phase 2: the model as director.** Nothing in the runtime needs Claude.
-- **Brand extractor:** take a URL or a logo upload and produce `brand` (colours, fonts mapped to the registry, copy, and the logo vectorised to SVG path data).
-- **Planner:** Gemini (or any model) gets the brief, the brand, `motion catalog --json` and [authoring-guide.md](authoring-guide.md), and returns a plan using structured output with `planSchema`.
-- **Repair loop:** run `validate --json`, feed errors back, and repeat until valid.
-- **Visual QA loop:** run `stills --sheet`. A vision model critiques the contact sheet (readability, overlaps, pacing), and the planner revises. Automatic checks catch text overflow and contrast.
+**Phase 2 (done): the model as director.** Nothing in the runtime needs Claude. See [ai-pipeline.md](ai-pipeline.md).
+- **Brand extractor:** takes a URL or a logo file and produces the brand kit: colours, fonts mapped to the registry, facts, and the logo vectorised to SVG path data.
+- **Planner:** Gemini 3.8 Flash gets the brief, the brand facts, the catalog and [authoring-guide.md](authoring-guide.md), and returns a plan using structured output (one schema branch per technique).
+- **Repair loop:** validator and lint issues go back to the model until the plan is clean. Small length errors are fixed in code.
+- **Visual QA loop:** settled frames of every section go to Gemini vision. Its fixes go back to the planner in the same conversation.
 
 **Phase 3: product.** A web app to upload a brand, pick a recipe, preview live in the browser (the engine already runs there), edit copy and timing, and export. Plus a render queue on server workers, 9:16 and 1:1 formats, and more genres and techniques.
 
