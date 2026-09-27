@@ -83,7 +83,22 @@ describe('refinement signals', () => {
 
 describe('toolkit fixtures', () => {
   it('validates the toolkit and preset showcase plans', () => {
-    for (const f of ['test/fixtures/toolkit.plan.json', 'test/fixtures/presets.plan.json']) expect(validatePlan(JSON.parse(readFileSync(f, 'utf8'))).ok, f).toBe(true);
+    for (const f of ['test/fixtures/toolkit.plan.json', 'test/fixtures/presets.plan.json', 'test/fixtures/setpieces.plan.json']) expect(validatePlan(JSON.parse(readFileSync(f, 'utf8'))).ok, f).toBe(true);
+  });
+});
+
+import { setPieces, SETPIECE_DOCS } from '../src/engine/custom/setpieces';
+import { STAGE_DOCS } from '../src/engine/custom/stage';
+import { SETPIECES } from '../src/ai/invent-prompts';
+describe('set pieces', () => {
+  it('documents every set piece the director can choose', () => {
+    const T = { bg: '#0A0C14', text: '#EEF1F8', primary: '#3D5AFE', secondary: '#FF5A36', accent: '#FFD23F', surface: '#151822', muted: '#8A90A0', light: '#FFFFFF', dark: '#000000' };
+    const api = setPieces({ theme: T as never, logo: { path: null, d: null, box: [0, 0, 100, 100], monogram: 'N' }, eases: {}, layerOf: (() => ({})) as never });
+    for (const k of SETPIECES.filter(k => k !== 'none')) {
+      expect(typeof (api as Record<string, unknown>)[k], k).toBe('function');
+      expect(SETPIECE_DOCS).toContain(`S.set.${k}(`);
+    }
+    expect(STAGE_DOCS).toContain('S.set.swarm(');
   });
 });
 

@@ -1,0 +1,98 @@
+{
+ "meta": {
+  "title": "Set pieces",
+  "hud": false,
+  "captions": false,
+  "grain": 0.03
+ },
+ "brand": {
+  "name": "Northwind",
+  "colors": {
+   "bg": "#0A0C14",
+   "text": "#EEF1F8",
+   "primary": "#3D5AFE",
+   "secondary": "#FF5A36"
+  }
+ },
+ "music": {
+  "bpm": 120
+ },
+ "sections": [
+  {
+   "technique": "scene:swarm",
+   "beats": 8
+  },
+  {
+   "technique": "scene:extrude",
+   "beats": 4
+  },
+  {
+   "technique": "scene:extrudelogo",
+   "beats": 4
+  },
+  {
+   "technique": "scene:shatter",
+   "beats": 4
+  },
+  {
+   "technique": "scene:globe",
+   "beats": 4
+  },
+  {
+   "technique": "scene:flight",
+   "beats": 4
+  },
+  {
+   "technique": "scene:cylinder",
+   "beats": 4
+  },
+  {
+   "technique": "scene:rays",
+   "beats": 4
+  },
+  {
+   "technique": "scene:planes",
+   "beats": 4
+  }
+ ],
+ "custom": {
+  "scenes": [
+   {
+    "id": "swarm",
+    "draw": "S.set.swarm(g, t, { shapes: [[0,'scatter'],[S.b(0.5),'sphere'],[S.b(2),'text:MOVE'],[S.b(4),'logo'],[S.b(6),'vortex']], burst:[S.b(3)] });"
+   },
+   {
+    "id": "extrude",
+    "draw": "S.set.extrude(g, t, { text: 'NORTHWIND', size: 300, shine: [S.b(1.5)] });"
+   },
+   {
+    "id": "extrudelogo",
+    "draw": "S.set.extrude(g, t, { logo: true, size: 420, depth: 120, pose: [[0,60,-25,10,0.4],[S.b(1),-12,8,0,1],[S.b(4),10,-6,0,1.08]], ease: 'outExpo', shine:[S.b(1.25)] });"
+   },
+   {
+    "id": "shatter",
+    "draw": "S.set.shatter(g, t, { text: 'BREAK', size: 320, inAt: 0, dur: S.b(1), outAt: S.b(3) });"
+   },
+   {
+    "id": "globe",
+    "draw": "S.set.globe(g, t, { view: [[0, -40, 20, S.W*0.62, S.H/2, 380], [S.b(2), 10, 12, S.W*0.62, S.H/2, 470]], arcs: [{from:[59.9,10.75], to:[51.5,-0.13], at:S.b(1), label:'London'},{from:[59.9,10.75], to:[40.7,-74], at:S.b(1.5), label:'New York'},{from:[59.9,10.75], to:[25.2,55.3], at:S.b(2), label:'Dubai'}], pins:[{at:[59.9,10.75], t:S.b(0.5), label:'Oslo'}] }); S.title(g, 'WORLDWIDE', 120, 600, { t: t - S.b(0.5), preset: 'rise', size: 150, align: 'left', maxWidth: 800 });"
+   },
+   {
+    "id": "flight",
+    "draw": "S.set.flight(g, t, { passes: [S.b(1), S.b(2), S.b(3), S.b(4)], portals: [{word:'DESIGN'},{word:'BUILD', shape:'ring'},{word:'SHIP'},{shape:'diamond'}], roll: [[S.b(2.5),0],[S.b(3.2),180]] });"
+   },
+   {
+    "id": "cylinder",
+    "draw": "S.set.cylinder(g, t, { text: ['SOFTWARE', 'WEBSITES', 'AI'], rows: 5 });"
+   },
+   {
+    "id": "rays",
+    "draw": "S.set.rays(g, t, { text: 'LIGHT', size: 380, burst: [S.b(1)] }); S.set.flare(g, 1400 - t*200, 330, { intensity: 0.8 });"
+   },
+   {
+    "id": "planes",
+    "draw": "S.set.planes(g, t, { cam: [[0, -30, 18, 2600],[S.b(1), 25, 10, 2300],[S.b(2), -10, 24, 2400],[S.b(3), 0, 0, 1900]], cards: [ {z: 0, draw: (g, lt, c) => { S.font(g, 90, 800); g.fillStyle = S.colors.text; g.fillText('Dashboard', 80, 180); g.fillStyle = S.colors.primary; g.fillRect(80, 240, 600 * S.clamp(lt), 30); }}, {z: -300, x: 300, y: 120, w: 700, h: 420, at: S.b(0.5), color: S.colors.primary, draw: (g) => { S.font(g, 120, 800); g.fillStyle = '#fff'; g.fillText('+240%', 60, 260); }}, {z: 260, x: -520, y: -220, w: 520, h: 300, at: S.b(1)} ] });"
+   }
+  ]
+ }
+}

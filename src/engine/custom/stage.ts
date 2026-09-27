@@ -18,6 +18,7 @@ import { clamp, E, lerp, mod, prog, pulse, rnd, TAU } from '../core/math';
 import { font } from '../core/theme';
 import type { Ctx, Technique } from '../techniques/types';
 import { background, fluid, PRESET_DOCS, title } from './presets';
+import { setPieces, SETPIECE_DOCS } from './setpieces';
 import { bloom, camera, drawOn, fxFactory, glowAt, ICON_LIST, iconPoints, iconPolys, kf, linear, logoPoints, morph, radial, spring, TOOLKIT_DOCS, typeAnim } from './toolkit';
 
 // ── sandbox ─────────────────────────────────────────────────────────────────
@@ -161,6 +162,8 @@ function baseStage(c: Ctx): StageBase {
     title: (g: G, text: string, x: number, y: number, o: Parameters<typeof title>[6]) => title(ease, layerOf, g, text, x, y, o),
     bg: (g: G, o: Parameters<typeof background>[2]) => background(noise, g, o),
     fluid: (o: Parameters<typeof fluid>[1]) => fluid(layerOf, o),
+    // set pieces (setpieces.ts)
+    set: setPieces({ theme: T, logo: L, eases: ease, layerOf }),
     // colour
     mix: (a: string, b: string, p: number) => mixHex(a, b, p),
     rgba: (hex: string, a: number) => rgba(hex, a),
@@ -321,6 +324,7 @@ Runs once at load; return an object of shared helpers (drawing functions, palett
 - S.lib → whatever your lib returned
 - S.safe = 90 (px margin to keep text inside)
 
+${SETPIECE_DOCS}
 ${TOOLKIT_DOCS}
 ${PRESET_DOCS}
 

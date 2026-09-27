@@ -30,16 +30,18 @@ const SEEN_BEFORE = [
   'an end card with the logo tile, name, tagline and a pill button',
 ];
 
+export const SETPIECES = ['none', 'swarm', 'extrude', 'shatter', 'globe', 'flight', 'cylinder', 'rays', 'planes'] as const;
+
 export function directorSystem(): string {
   return `You are the creative director of the best motion design studio in the world. Your films go viral on YouTube, TikTok and Instagram and win awards; clients pay six figures for them. You are designing a new brand film. Afterwards you (as a creative coder) will build every frame in JavaScript on an HTML canvas with a professional toolkit (kinetic type animator, 3D camera, particles, morphs, glows, masks, the engine's finished effects as components), so design something you can build with procedural 2D drawing: no photos, video or 3D models.
 
 THE BAR: bold, dense, surprising, meticulously cut to the music. Unless the brief asks for calm, the energy is HIGH: the kind of edit people rewatch and share. Austere minimalism, voids, thin lines on black and "restraint" are not what is wanted. Every frame a poster. A single strong idea carried through every scene. Energy that builds to a peak and resolves on the brand. Read the craft handbook below: it is the standard you will be judged by, and its anti-patterns are automatic fails (above all: empty dark frames with thin lines, tiny text, slow openings, uniform timing).
 
-NEW: earlier films for this brand used the following; the film you design must look and feel clearly different (you may still use techniques like kinetic type or colour punches, as long as the overall idea and look are new): ${SEEN_BEFORE.join('; ')}.
+NEW: earlier films for this brand used the following; the film you design must look and feel clearly different (you may still use techniques like kinetic type or colour punches, and the set-piece library below, as long as the overall idea, staging and look are new): ${SEEN_BEFORE.join('; ')}.
 
 Rules:
 - Length: the scenes' beats must add up exactly to the target beats. 6–10 scenes; beats in multiples of 0.5. Most scenes 2–6 beats (short scenes stay dynamic; long ones go static), at most one scene longer than 8 beats. The first second is the most striking frame of the film.
-- At least TWO SIGNATURE SET PIECES: moments with real production value that make people rewatch, built with depth (3D camera, parallax layers), particle systems (800+ points), light (glow, bloom, rim light, light sweeps) and dense layered detail. Flat type on a colour field is not a set piece. Mark them in the scene ideas.
+- THE SET-PIECE LIBRARY: your studio has hand-built, film-grade 3D set pieces that you direct (you choose the shapes, words, colours, camera moves and the beats things happen on): swarm (thousands of glowing 3D particles flying between shapes on the beat: sphere, torus, helix, vortex, wave, the logo, any short word, icons; bursts on kicks), extrude (solid extruded 3D type or logo swinging in with lit sides and a specular light sweep), shatter (a word or the logo assembling from glass shards flying in from 3D space, or exploding into them), globe (a dotted world globe with flying arcs, pins and labels), flight (the camera flies over an endless floor through giant portal frames carrying words, flashing as it crosses each one on the beat, with barrel rolls), cylinder (rows of huge type wrapped around a rotating 3D cylinder, counter-rotating, whipping in), rays (volumetric light streaming out of a word or the logo, light surges on hits, anamorphic flares), planes (cards or screens floating in 3D space with camera cuts between poses). Build the film around 3–5 DIFFERENT set pieces (name each scene's set piece in its setpiece field), staged in the film's own look: your backgrounds, colours, overlays and type around them. Kinetic-type scenes between them keep the rhythm. A set piece serves the concept; it is not the concept.
 - The last scene resolves on the brand: the logo mark (S.logo / S.logoPath / S.logoPoints), the name and the site, holding still and clean for the final 1.5 seconds.
 - On-screen text: short, punchy, in the brand's own voice, from the brief and the brand facts. Never invent numbers, clients, places or awards.
 - Fonts: display from ${DISPLAY_NAMES.join(', ')}; optional serif from ${SERIF_NAMES.join(', ')}.
@@ -110,9 +112,10 @@ export function directionSchema() {
             beats: { type: 'number' },
             idea: { type: 'string', description: 'what happens on screen, precisely, moment by moment, and how it lands on the beat' },
             onscreenText: { type: 'array', items: { type: 'string' } },
+            setpiece: { type: 'string', enum: [...SETPIECES], description: 'the crafted set piece (S.set.*) this scene is built on, or none for a kinetic-type or graphic scene' },
             transition: { type: 'string', enum: [...TRANSITIONS], description: 'into the next scene' },
           },
-          required: ['id', 'title', 'beats', 'idea', 'onscreenText', 'transition'],
+          required: ['id', 'title', 'beats', 'idea', 'onscreenText', 'setpiece', 'transition'],
         },
       },
     },
@@ -128,7 +131,7 @@ export interface Direction {
   look: { palette: string; extraColors?: string[]; display: string; serif?: string; typography: string; composition: string; texture: string; grain: number };
   motion: string;
   sound: { bpm: number; key?: string; description: string };
-  scenes: { id: string; title: string; beats: number; idea: string; onscreenText: string[]; transition: string }[];
+  scenes: { id: string; title: string; beats: number; idea: string; onscreenText: string[]; setpiece?: string; transition: string }[];
 }
 
 let techList: string | undefined;
@@ -158,11 +161,11 @@ export function coderSystem(barCode?: string): string {
 
 How you work:
 - Plan each scene as a beat-by-beat timeline first (in comments at the top of the draw body), then build it in layers: background (never an empty flat field: light, gradient, texture), midground, foreground hero, overlay details.
-- For hero words use S.title (big, crafted presets: slam, rise, split, stretch, scramble, outline-fill, stack) and for rich backgrounds S.bg (mesh, grid, flow, dots, rays, stripes); S.fluid gives liquid/molten metaballs. Customise and combine them; replace them only with something better.
+- For hero words in kinetic-type scenes use S.title (big, crafted presets: slam, rise, split, stretch, scramble, outline-fill, stack) and for rich backgrounds S.bg (mesh, grid, flow, dots, rays, stripes); S.fluid gives liquid/molten metaballs. Customise and combine them; replace them only with something better.
 - Use the pro toolkit: S.type for kinetic type, S.kf / S.spring for motion curves, S.cam for 3D, S.glow / S.bloom for light, S.morph / S.iconPoints / S.logoPoints for particles, S.layer for masks and composites, S.fx for the engine's finished effects when they serve the idea.
 - Hero type 160–400 px. Every key word fully readable for at least 0.6 s. Something happens on every beat during energy sections; nothing stays still for more than 0.5 s before the final hold.
 - Beat precision is measured: every hard change (cut, slam, colour flip, swap) must land exactly on the 16th-note grid. Compute its time as S.b(n) with n a multiple of 0.25, never a free number of seconds.
-- Set pieces (scenes the direction marks as signature moments) deserve real production value: depth, hundreds or thousands of particles, light, layered micro-detail. Their draw body can be long.
+- A scene whose direction names a set piece is built on S.set.<name>: it is the crafted 3D, particle and light core of the shot, better than anything rebuilt by hand, so never rebuild it. Direct it precisely: every option (shapes, words, colours, pose and camera keys, bursts, passes) timed with S.b(n) to the direction's beats. Then stage it so it belongs to this film: your own background under it (pass bg: null) when the look calls for one, and type, labels, overlays and light on top. One set piece per frame (two at most, e.g. S.set.flare over S.set.rays).
 - Only show the on-screen text given in the direction. Never add numbers or claims of your own.
 
 Code rules (the engine enforces them; violations come back to you as errors):
@@ -225,7 +228,7 @@ export function sceneUser(d: Direction, lib: string, i: number, bpm: number): st
   const s = d.scenes[i], prev = d.scenes[i - 1], next = d.scenes[i + 1];
   const B = 60 / bpm;
   return `DIRECTION
-${JSON.stringify({ ...d, scenes: d.scenes.map(x => ({ id: x.id, title: x.title, beats: x.beats, idea: x.idea })) }, null, 1)}
+${JSON.stringify({ ...d, scenes: d.scenes.map(x => ({ id: x.id, title: x.title, beats: x.beats, idea: x.idea, setpiece: x.setpiece ?? 'none' })) }, null, 1)}
 
 SHARED LIB (available as S.lib)
 \`\`\`js
@@ -235,6 +238,7 @@ ${lib}
 WRITE SCENE ${i + 1} of ${d.scenes.length}: "${s.id}" — ${s.title}
 - Length: ${s.beats} beats = ${(s.beats * B).toFixed(3)} s at ${bpm} BPM (one beat = ${B.toFixed(3)} s)
 - Idea: ${s.idea}
+- Set piece: ${s.setpiece && s.setpiece !== 'none' ? `S.set.${s.setpiece} (build the shot on it; see its options in the Stage API)` : 'none (a kinetic-type or graphic scene)'}
 - On-screen text (exactly these strings): ${JSON.stringify(s.onscreenText)}
 - Comes after: ${prev ? `"${prev.id}" — ${prev.idea}` : 'nothing: this is the first frame of the film, it must hook instantly'}
 - Leads into: ${next ? `"${next.id}" — ${next.idea} (transition: ${s.transition})` : 'nothing: this is the final scene; resolve on the logo, name and site and hold the last 1.5 s still'}
@@ -304,7 +308,8 @@ export function sceneCriticUser(d: Direction, i: number): string {
 ${JSON.stringify({ title: d.title, concept: d.concept, vibe: d.vibe, look: d.look, motion: d.motion }, null, 1)}
 
 THIS SCENE (${i + 1}/${d.scenes.length}): "${s.id}" — ${s.title}, ${s.beats} beats
-Idea: ${s.idea}
+Idea: ${s.idea}${s.setpiece && s.setpiece !== 'none' ? `
+Set piece: ${s.setpiece}` : ''}
 On-screen text: ${JSON.stringify(s.onscreenText)}
 
 Watch the clip and review it.`;

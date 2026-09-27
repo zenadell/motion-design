@@ -123,6 +123,7 @@ motion invent --brand out/brand.json --brief "Invent an entirely new visual lang
 
 1. **Concept tournament.** The director pitches 3 radically different concepts (idea, hook, signature moment, how to build it). A judging pass ranks them on wow, buildability, fit and energy, and the winner is developed into the full direction: shot list, type, palette, motion principles and score. The director works to the standard in the [craft handbook](motion-craft.md).
 2. **Code.** A shared `lib` and `score` are written, then tested on a probe scene and fixed. The coder gets:
+   - the **set-piece library** (`S.set.*`, below), which the director names per scene;
    - the [Stage API](../src/engine/custom/stage.ts) and the pro toolkit: `S.type` kinetic type, `S.kf` keyframes, `S.spring`, the `S.cam` 3D camera and cards, `S.glow`/`S.bloom`, `S.drawOn`, particle morphs from icons and the logo, and `S.fx` (the engine's finished techniques as components);
    - the handbook;
    - an [exemplar](../src/ai/exemplars/kinetic-hook.js) of the code quality expected.
@@ -138,6 +139,23 @@ motion invent --brand out/brand.json --brief "Invent an entirely new visual lang
 Roles can use different models: `--code-model gemini-3.1-pro-preview --critic-model gemini-3.8-flash`. `--budget` caps optional refinement spend.
 
 Scene code is sandboxed: no DOM, network, timers or clocks, and a seeded `Math.random`. Page requests are blocked while rendering.
+
+### Set pieces: crafted 3D moments the model directs
+
+The measurements below showed where Gemini falls short: scenes with real production value (depth, particles, light). Writing those from scratch each time is where a fast model is weakest, and its self-critique cannot pull it up. So the engine ships them, hand-built and deeply parameterised, and the model directs them the way a director directs a VFX team: what, where, which words and colours, which camera moves, on which beats. [setpieces.ts](../src/engine/custom/setpieces.ts):
+
+| set piece | what it is |
+|---|---|
+| `S.set.swarm` | thousands of glowing 3D particles flying between shapes on the beat (sphere, torus, helix, vortex, wave, the logo, any word, icons), with depth, motion trails, bloom and bursts |
+| `S.set.extrude` | solid extruded 3D type or logo with lit sides, a keyframed camera swing and a specular light sweep |
+| `S.set.shatter` | a word or the logo assembling from glass shards flying in from 3D space (with a landing flash), or exploding |
+| `S.set.globe` | a dotted world globe with atmosphere, graticule, flying arcs, landing ripples, pins and labels |
+| `S.set.flight` | the camera flies over an endless floor through giant portal frames carrying words, with speed streaks, rolls and a flash at each pass |
+| `S.set.cylinder` | rows of huge type wrapped around a rotating 3D cylinder, counter-rotating and whipping in, the back seen through |
+| `S.set.rays`, `S.set.flare` | volumetric light streaming out of a word or the logo, surges on hits, and an anamorphic lens flare |
+| `S.set.planes` | cards or screens floating in 3D, drawn by the scene's own code, with camera cuts between poses |
+
+The director names one per scene (`setpiece` in the direction) and builds the film around 3–5 different ones; the coder stages each in the film's own look (backgrounds, type and overlays around it, `bg: null` to composite). Every option can be animated per frame. `test/fixtures/setpieces.plan.json` is a showcase of all of them.
 
 ### Setting the bar, client feedback and refining
 
