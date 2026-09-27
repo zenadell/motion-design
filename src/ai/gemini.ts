@@ -74,6 +74,8 @@ export class Gemini implements LLM {
       } catch (e) {
         const status = e instanceof ApiError ? e.status : e instanceof LLMError ? e.status : undefined;
         const msg = (e as Error).message ?? String(e);
+        if (status === 402 || /prepayment credits are depleted|billing/i.test(msg))
+          throw new LLMError('Gemini: the account is out of credits. Top up at https://aistudio.google.com (Billing), then run again.', status);
         if (status === 400 && thinking && /thinking/i.test(msg)) {
           // an older model without thinking levels: retry once without them
           thinking = false;

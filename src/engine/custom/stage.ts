@@ -17,6 +17,7 @@ import { fitFont, H, resetCtx, W, type G } from '../core/draw';
 import { clamp, E, lerp, mod, prog, pulse, rnd, TAU } from '../core/math';
 import { font } from '../core/theme';
 import type { Ctx, Technique } from '../techniques/types';
+import { background, fluid, PRESET_DOCS, title } from './presets';
 import { bloom, camera, drawOn, fxFactory, glowAt, ICON_LIST, iconPoints, iconPolys, kf, linear, logoPoints, morph, radial, spring, TOOLKIT_DOCS, typeAnim } from './toolkit';
 
 // ── sandbox ─────────────────────────────────────────────────────────────────
@@ -104,6 +105,20 @@ export interface StageBase {
 }
 
 const layers = new Map<string, [HTMLCanvasElement, G]>();
+/** A cleared offscreen canvas, reused per key and size. */
+function layerOf(key: string, w = W, h = H): { canvas: HTMLCanvasElement; g: G } {
+  const k = `${key}:${w}x${h}`;
+  let e = layers.get(k);
+  if (!e) {
+    const cv = document.createElement('canvas');
+    cv.width = w; cv.height = h;
+    e = [cv, cv.getContext('2d')!];
+    layers.set(k, e);
+  }
+  resetCtx(e[1]);
+  e[1].clearRect(0, 0, w, h);
+  return { canvas: e[0], g: e[1] };
+}
 
 function baseStage(c: Ctx): StageBase {
   const T = c.theme, L = c.brand.logo;
@@ -122,19 +137,7 @@ function baseStage(c: Ctx): StageBase {
     logoWidth: (g: G, h: number) => logoWidth(g, L, h),
     logoPath: L.path,
     logoBox: L.box,
-    layer: (key: string, w = W, h = H) => {
-      const k = `${key}:${w}x${h}`;
-      let e = layers.get(k);
-      if (!e) {
-        const cv = document.createElement('canvas');
-        cv.width = w; cv.height = h;
-        e = [cv, cv.getContext('2d')!];
-        layers.set(k, e);
-      }
-      resetCtx(e[1]);
-      e[1].clearRect(0, 0, w, h);
-      return { canvas: e[0], g: e[1] };
-    },
+    layer: layerOf,
     // maths
     ease, lerp, clamp: (x: number, a = 0, b = 1) => clamp(x, a, b), prog, mod, pulse, rnd, noise,
     // pro toolkit (toolkit.ts)
@@ -154,6 +157,10 @@ function baseStage(c: Ctx): StageBase {
     linear,
     radial,
     fx: fxFactory(c),
+    // crafted presets (presets.ts)
+    title: (g: G, text: string, x: number, y: number, o: Parameters<typeof title>[6]) => title(ease, layerOf, g, text, x, y, o),
+    bg: (g: G, o: Parameters<typeof background>[2]) => background(noise, g, o),
+    fluid: (o: Parameters<typeof fluid>[1]) => fluid(layerOf, o),
     // colour
     mix: (a: string, b: string, p: number) => mixHex(a, b, p),
     rgba: (hex: string, a: number) => rgba(hex, a),
@@ -315,6 +322,7 @@ Runs once at load; return an object of shared helpers (drawing functions, palett
 - S.safe = 90 (px margin to keep text inside)
 
 ${TOOLKIT_DOCS}
+${PRESET_DOCS}
 
 ## A (audio, for sfx and score)
 Instruments (times are absolute seconds, m = MIDI note number, v = volume, p = pan -1..1):

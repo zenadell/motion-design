@@ -1,0 +1,17 @@
+{
+  "meta": { "title": "Presets", "hud": false, "captions": false, "grain": 0.04 },
+  "brand": { "name": "Northwind", "colors": { "bg": "#0A0C14", "text": "#EEF1F8", "primary": "#3D5AFE", "secondary": "#FF5A36" } },
+  "music": { "bpm": 120 },
+  "custom": { "scenes": [
+    { "id": "a", "draw": "S.bg(g, { t, preset: 'mesh', colors: [S.colors.primary, S.colors.secondary], base: S.colors.bg }); S.title(g, 'MOMENTUM', S.W/2, 620, { t, preset: 'slam', color: S.colors.text, accent: S.colors.secondary });" },
+    { "id": "b", "draw": "S.bg(g, { t, preset: 'grid', colors: [S.colors.text, S.colors.primary], base: '#05060A' }); S.title(g, 'IDEAS INTO MOTION', S.W/2, 600, { t, preset: 'rise', color: S.colors.text });" },
+    { "id": "c", "draw": "S.bg(g, { t, preset: 'flow', colors: [S.colors.primary, S.colors.secondary], base: '#05060A' }); S.title(g, 'SIGNAL', S.W/2, 640, { t, preset: 'scramble', color: S.colors.text, accent: S.colors.secondary, size: 360 });" },
+    { "id": "d", "draw": "g.fillStyle = '#000'; g.fillRect(0,0,S.W,S.H); const blobs = []; for (let i = 0; i < 28; i++) { const a = i / 28 * S.TAU + t * 0.8; const r = 260 + 160 * S.noise(i, t); blobs.push({ x: S.W/2 + Math.cos(a) * r * (1 - S.ease.inExpo(S.prog(t, 1.2, 1.9))), y: S.H/2 + Math.sin(a) * r * 0.6 * (1 - S.ease.inExpo(S.prog(t, 1.2, 1.9))), r: 50 + 40 * S.noise(i * 3, t * 2) }); } g.drawImage(S.fluid({ t, blobs, colors: ['#FF5A36', '#FFB347', '#3D5AFE'] }), 0, 0); S.title(g, 'FLOW', S.W/2, 620, { t: t - 1.4, preset: 'stretch', color: '#fff' });" },
+    { "id": "e", "draw": "S.bg(g, { t, preset: 'rays', colors: [S.colors.secondary, S.colors.primary], base: S.colors.bg }); S.title(g, 'OUTLINE', S.W/2, 520, { t, preset: 'outline-fill', color: S.colors.text }); S.title(g, 'STACKED', S.W/2, 860, { t: t - 0.3, preset: 'stack', color: S.colors.secondary, accent: S.colors.text, size: 200 });" },
+    { "id": "f", "draw": "S.bg(g, { t, preset: 'dots', colors: [S.colors.primary, S.colors.secondary], base: '#05060A' }); S.title(g, 'SPLIT', S.W/2, 620, { t, preset: 'split', color: S.colors.text, size: 380 });" }
+  ] },
+  "sections": [
+    { "technique": "scene:a", "beats": 4 }, { "technique": "scene:b", "beats": 4 }, { "technique": "scene:c", "beats": 4 },
+    { "technique": "scene:d", "beats": 4 }, { "technique": "scene:e", "beats": 4 }, { "technique": "scene:f", "beats": 4 }
+  ]
+}

@@ -146,6 +146,7 @@ export function coderSystem(): string {
 
 How you work:
 - Plan each scene as a beat-by-beat timeline first (in comments at the top of the draw body), then build it in layers: background (never an empty flat field: light, gradient, texture), midground, foreground hero, overlay details.
+- For hero words use S.title (big, crafted presets: slam, rise, split, stretch, scramble, outline-fill, stack) and for rich backgrounds S.bg (mesh, grid, flow, dots, rays, stripes); S.fluid gives liquid/molten metaballs. Customise and combine them; replace them only with something better.
 - Use the pro toolkit: S.type for kinetic type, S.kf / S.spring for motion curves, S.cam for 3D, S.glow / S.bloom for light, S.morph / S.iconPoints / S.logoPoints for particles, S.layer for masks and composites, S.fx for the engine's finished effects when they serve the idea.
 - Hero type 160–400 px. Every key word fully readable for at least 0.6 s. Something happens on every beat during energy sections.
 - Only show the on-screen text given in the direction. Never add numbers or claims of your own.

@@ -80,3 +80,9 @@ describe('refinement signals', () => {
     expect(spring(3, 200, 10)).toBeCloseTo(1, 2);
   });
 });
+
+describe('toolkit fixtures', () => {
+  it('validates the toolkit and preset showcase plans', () => {
+    for (const f of ['test/fixtures/toolkit.plan.json', 'test/fixtures/presets.plan.json']) expect(validatePlan(JSON.parse(readFileSync(f, 'utf8'))).ok, f).toBe(true);
+  });
+});

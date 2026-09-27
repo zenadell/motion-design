@@ -191,6 +191,17 @@ export async function invent(llm: LLM, o: InventOptions) {
 
   const browser = await launch();
   try {
+    return await body();
+  } catch (e) {
+    // keep everything made so far (direction, code, scores) so a run can be resumed or inspected
+    writeFileSync(f('partial.json'), JSON.stringify({ error: String((e as Error).message ?? e), direction: d, lib, score, scenes, usage: summarizeUsage(usage) }, null, 2));
+    log(`  saved partial results to ${f('partial.json')}`);
+    throw e;
+  } finally {
+    await browser.close();
+  }
+
+  async function body() {
     // ── automated test of a (mini) plan: syntax, exceptions, blank/slow frames, audio, facts ──
     const run = async (input: PlanInput, codeForFacts: string[]): Promise<{ plan?: Plan; problems: string[] }> => {
       const problems: string[] = [];
@@ -394,8 +405,6 @@ export async function invent(llm: LLM, o: InventOptions) {
     };
     writeFileSync(f('report.json'), JSON.stringify(report, null, 2));
     return { plan, direction: d, films, usage, video: videoFile, scores: best.map(b => b?.score) };
-  } finally {
-    await browser.close();
   }
 }
 

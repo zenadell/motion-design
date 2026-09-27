@@ -31,7 +31,7 @@ const esc = (s: string) => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;
 
 /** A single self-contained HTML file: fonts, engine, plan and (if needed) map data inlined. */
 export function buildHtml(plan: Plan): string {
-  const engine = readFileSync(join(ROOT, 'dist', 'engine.js'), 'utf8').replace(/<\/script/gi, '<\\/script');
+  const engine = readFileSync(process.env.MOTION_ENGINE_PATH || join(ROOT, 'dist', 'engine.js'), 'utf8').replace(/<\/script/gi, '<\\/script');
   const needsLand = plan.sections.some(s => s.technique === 'dot-globe');
   const land = needsLand ? readFileSync(join(ROOT, 'assets', 'land-dots.json'), 'utf8') : '[]';
   const c = plan.brand.colors;
