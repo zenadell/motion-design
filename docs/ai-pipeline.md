@@ -219,6 +219,10 @@ In exact mode each scene's idea ends with its shot's slice of the frame log, as 
 
 The inspector picks the moments where the reference holds still and the two differ most. For each it builds a full-resolution side-by-side still (reference | copy), plus a zoomed crop of the content or of the area that differs most. A detail critic reads the measurements and stills and lists every difference with numbers, e.g. "gap between the card columns: reference ≈ 20 px, copy 0 → leave a 20 px gutter". Those findings lead the fixes. The coder's rewrite prompt includes the same stills. From its first draft the coder also gets three sharp stills of the target, alongside the small clip.
 
+**Objective fidelity.** Every exact-mode render also gets its SSIM against the reference segment: structural similarity over every frame, where 1 means identical. The critic's scene scores swing by about ±1 between identical runs. In three variants of the Pinterest copy, the scene scores averaged 4.8–5.0 with no clear order. Per-scene SSIM still showed the pin grid improving from 0.762 to 0.791. SSIM leads the detail report and is logged next to each score. It breaks head-to-head ties, and it vetoes a "win" that lowers fidelity by more than 0.02.
+
+**Robustness.** A reply cut off mid-stream is asked for again. A scene step that still fails (a draft, a rewrite, a head-to-head) is skipped, and the scene keeps its best version. `replicate --resume-partial` continues a stopped run from its `partial.json` and keeps the finished scenes.
+
 `motion inspect <replicate-dir> --reference ref.mp4 [--scenes id,…]` runs the inspector on a finished copy without calling a model. It writes `report.txt` and the side-by-side stills for each scene.
 
 Check the plan before paying for the rebuild: `--plan-only` stops after `breakdown.json` and `direction.json` (about $0.12 for a 16-s clip), and `--reuse-plan` then rebuilds from those files. You can also edit them first.
