@@ -199,7 +199,9 @@ export async function invent(llm: LLM, o: InventOptions) {
   writeFileSync(f('direction.json'), JSON.stringify(d, null, 2));
   log(`  "${d.title}" — ${d.concept}`);
   log(`  ${d.scenes.length} scenes · ${bpm} BPM · ${d.look.display}${d.look.serif ? ` + ${d.look.serif}` : ''} · ${d.vibe.join(', ')}`);
-  const refNote = (o.reference ? `\n\nREFERENCE FILM BREAKDOWN (match its craft, pacing and style)\n${o.reference.note}` : '') + feedbackNote;
+  const exact = !!o.reference?.exact;
+  const refNote = (o.reference ? `\n\nREFERENCE FILM BREAKDOWN (match its craft, pacing and style)\n${o.reference.note}` : '') + feedbackNote
+    + (exact ? `\n\nEXACT COPY MODE: the reference is the specification. Reproduce it faithfully: the same layout, element sizes (even small ones), colours, words, timing and motion, including its still moments and white space. Where the craft handbook's style rules (hero type sizes, constant motion, filling the frame) disagree with the reference, the reference wins. Critics: score each dimension by how faithfully the render reproduces the reference segment; any difference from the reference is a flaw, even one that looks "better".` : '');
 
   const corpus = factCorpus(o.kit, o.brief);
   const allowed = [String(bpm), String(new Date().getFullYear())];
@@ -355,8 +357,8 @@ export async function invent(llm: LLM, o: InventOptions) {
         text('RENDERED SCENE:'), video(cm.clip, 12),
         text(measured(cm.m, cm.beat)),
       ], sceneCriticSchema(), 'medium');
-      // measured problems always reach the rewrite, even if the critic did not list them
-      c.fixes = [...(Array.isArray(c.fixes) ? c.fixes : []), ...cm.m.flags.map(f => `(measured) ${f}`)];
+      // measured problems always reach the rewrite, even if the critic did not list them (not for an exact copy: the reference decides)
+      c.fixes = [...(Array.isArray(c.fixes) ? c.fixes : []), ...(exact ? [] : cm.m.flags.map(f => `(measured) ${f}`))];
       return { c, s: critiqueScore(c), clip: cm.clip };
     };
 
@@ -369,7 +371,8 @@ export async function invent(llm: LLM, o: InventOptions) {
       const ask1 = (a: Buffer, b: Buffer, k: string) =>
         ask<{ winner: 'A' | 'B' | 'tie'; reason: string }>(criticLLM, `pair ${d.scenes[i].id} ${tag} ${k}`, pairSystem(), [
           `SCENE "${d.scenes[i].id}": ${d.scenes[i].idea}${feedbackNote}`,
-          text('VERSION A:'), video(a, 12), text('VERSION B:'), video(b, 12), 'Which is better?',
+          ...(exact && o.reference?.clips?.[i] ? [text('THE REFERENCE (the target):'), video(o.reference.clips[i], 12)] : []),
+          text('VERSION A:'), video(a, 12), text('VERSION B:'), video(b, 12), exact ? 'Which version is closer to the reference?' : 'Which is better?',
         ], pairSchema(), 'low');
       const [x, y] = await Promise.all([ask1(curClip, nextClip, 'ab'), ask1(nextClip, curClip, 'ba')]);
       const nextWins = (x.winner === 'B' ? 1 : 0) + (y.winner === 'A' ? 1 : 0);
