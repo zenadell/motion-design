@@ -153,6 +153,7 @@ export class OpenRouter implements LLM {
         const choice = body.choices?.[0];
         const text = choice?.message?.content ?? '';
         if (!text.trim()) throw new LLMError(`OpenRouter returned no text (${choice?.error?.message ?? choice?.finish_reason ?? 'empty reply'})`);
+        if (choice?.finish_reason === 'length') this.log(`  ${req.label}: the reply hit ${this.model}'s output limit and may be cut off`);
         const u = body.usage ?? {};
         const thinking = u.completion_tokens_details?.reasoning_tokens ?? 0;
         return {

@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ffmpegPath } from '../cli/render';
@@ -9,7 +9,7 @@ import type { BrandKit } from './brand-kit';
 import { invent, type InventOptions } from './invent';
 import { directionSchema, type Direction } from './invent-prompts';
 import craft from '../../docs/motion-craft.md?raw';
-import { parseJson, text, user, video, type LLM } from './llm';
+import { image, parseJson, text, user, video, type LLM, type Part, type Usage } from './llm';
 
 // Replicate mode: a user brings a video they love. The model watches it,
 // breaks it down shot by shot (timing, motion, type, colour, sound), adapts
@@ -56,6 +56,28 @@ export async function referenceClips(file: string, windows: { from: number; to: 
   }
 }
 
+/**
+ * Sharp still frames at a steady rate, with their times: a model reads small
+ * words and measures layout from these far better than from a compressed clip.
+ */
+export async function referenceFrames(file: string, fps: number, width = 1024): Promise<{ t: number; jpg: Buffer }[]> {
+  const tmp = mkdtempSync(join(tmpdir(), 'motion-refframes-'));
+  try {
+    await ff(['-y', '-loglevel', 'error', '-i', file, '-vf', `fps=${fps},scale='min(${width},iw)':-2`, '-q:v', '3', join(tmp, 'f%04d.jpg')]);
+    return readdirSync(tmp).filter(f => f.endsWith('.jpg')).sort().map((f, k) => ({ t: k / fps, jpg: readFileSync(join(tmp, f)) }));
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+}
+
+/** The frame log entries inside a window, with times relative to its start. */
+export function frameLogFor(log: Breakdown['frameLog'], from: number, to: number): string {
+  return (log ?? [])
+    .filter(e => e.t >= from - 1e-3 && e.t < to - 1e-3)
+    .map(e => `t=${(e.t - from).toFixed(2)} s: ${e.onScreen}`)
+    .join('\n');
+}
+
 export interface Breakdown {
   summary: string;
   bpm: number;
@@ -66,6 +88,8 @@ export interface Breakdown {
   texture: string;
   sound: string;
   font?: string;
+  /** What is on screen at each reference frame, read from the stills. */
+  frameLog?: { t: number; onScreen: string }[];
   shots: { start: number; end: number; what: string; motion: string; background?: string; text: string[]; transition: string }[];
 }
 
@@ -81,6 +105,18 @@ const breakdownSchema = () => ({
     motion: { type: 'string', description: 'easing, speed, rhythm, camera, transitions, signature moves' },
     texture: { type: 'string' },
     sound: { type: 'string', description: 'genre, instruments, structure, how sound effects sit on the picture' },
+    frameLog: {
+      type: 'array',
+      description: 'one entry per still frame you were shown, in order, written BEFORE the shots',
+      items: {
+        type: 'object',
+        properties: {
+          t: { type: 'number', description: 'the frame time in seconds, as labelled' },
+          onScreen: { type: 'string', description: 'one compact line (under 60 words): the visible text copied character for character with its colour, size (% of frame height) and centre (% x, % y); shapes and UI parts with their boxes (% of the frame) and colours; glows. When little changed, write "as before, except …"' },
+        },
+        required: ['t', 'onScreen'],
+      },
+    },
     shots: {
       type: 'array',
       items: {
@@ -97,7 +133,7 @@ const breakdownSchema = () => ({
       },
     },
   },
-  required: ['summary', 'bpm', 'style', 'palette', 'typography', 'font', 'motion', 'texture', 'sound', 'shots'],
+  required: ['summary', 'bpm', 'style', 'palette', 'typography', 'font', 'motion', 'texture', 'sound', 'frameLog', 'shots'],
 });
 
 export interface ReplicateOptions extends Omit<InventOptions, 'direction' | 'reference' | 'seconds'> {
@@ -110,6 +146,10 @@ export interface ReplicateOptions extends Omit<InventOptions, 'direction' | 'ref
    * own soundtrack on the final video.
    */
   exact?: boolean;
+  /** Stop after the breakdown and direction (both written to outDir): a cheap check before the rebuild. */
+  planOnly?: boolean;
+  /** Rebuild from the breakdown.json and direction.json already in outDir (from a --plan-only run). */
+  reusePlan?: boolean;
 }
 
 /** In exact mode the palette comes from the reference: darkest → bg, lightest → text, the most saturated → primary. */
@@ -127,18 +167,56 @@ function paletteRoles(hexes: string[]) {
   return { bg, text, primary, secondary };
 }
 
+/** The critic watches the reference and writes the frame log and the shot list. */
+async function breakdown(critic: LLM, file: string, dur: number, outDir: string): Promise<{ bd: Breakdown; usage: Usage }> {
+  const { full } = await referenceClips(file, []);
+  // the clip for motion and sound, and sharp timed stills for words and layout
+  const fps = Math.min(4, Math.max(0.5, Math.floor((72 / Math.max(1, dur)) * 2) / 2));
+  const stills = await referenceFrames(file, fps);
+  const stillParts: Part[] = stills.flatMap(f => [text(`t=${f.t.toFixed(2)} s`), image(f.jpg, 'image/jpeg')]);
+  const bdRes = await critic.json({
+    label: 'breakdown', effort: 'high', schema: breakdownSchema(),
+    system: `You are a senior motion designer breaking down a reference film so a team can rebuild it shot for shot. Watch it closely (with sound) and describe everything that makes it work: every shot with its exact start and end time, composition, what moves and how (timing, easing, overshoot, stagger), typography, colour, texture, camera, transitions, and the music. Be precise: numbers, positions, sizes relative to the frame, beat positions.
+
+You also get sharp still frames every ${(1 / fps).toFixed(2)} s, each labelled with its time. Work from them first: fill frameLog with one entry per still (read every word exactly as written, however small; measure sizes and positions against the frame; note colours), then derive the shots from the log: a new shot starts where the composition changes. Words must match the frames character for character; never guess or complete a phrase. Small elements stay small: report the size you measure, not a typical one.
+
+# Craft handbook (vocabulary)
+${craft}`,
+    turns: [user(video(full, 12), text(`${stills.length} STILL FRAMES (${fps} per second)`), ...stillParts, text('Break this film down: the frame log first, then the shots.'))],
+  });
+  try {
+    return { bd: parseJson<Breakdown>(bdRes.text), usage: bdRes.usage };
+  } catch (e) {
+    writeFileSync(join(outDir, 'breakdown.raw.txt'), bdRes.text);
+    throw e;
+  }
+}
+
+function loadPlan(dir: string): { breakdown: Breakdown; direction: Direction } | undefined {
+  const bf = join(dir, 'breakdown.json'), df = join(dir, 'direction.json');
+  if (!existsSync(bf) || !existsSync(df)) return undefined;
+  return { breakdown: JSON.parse(readFileSync(bf, 'utf8')) as Breakdown, direction: JSON.parse(readFileSync(df, 'utf8')) as Direction };
+}
+
 export async function replicate(llm: LLM, o: ReplicateOptions) {
   const log = o.log ?? (() => {});
   const critic = o.criticLLM ?? llm;
   const dur = await videoDuration(o.videoFile);
-  log(`1/3 watching the reference (${dur.toFixed(1)} s)`);
-  const { full } = await referenceClips(o.videoFile, []);
-  const bdRes = await critic.json({
-    label: 'breakdown', effort: 'high', schema: breakdownSchema(),
-    system: `You are a senior motion designer breaking down a reference film so a team can rebuild it shot for shot. Watch it closely (with sound) and describe everything that makes it work: every shot with its exact start and end time, composition, what moves and how (timing, easing, overshoot, stagger), typography, colour, texture, camera, transitions, and the music. Be precise: numbers, positions, sizes relative to the frame, beat positions.\n\n# Craft handbook (vocabulary)\n${craft}`,
-    turns: [user(video(full, 12), text('Break this film down.'))],
-  });
-  const bd = parseJson<Breakdown>(bdRes.text);
+  mkdirSync(o.outDir, { recursive: true });
+  // a plan saved by an earlier run (--plan-only) skips the breakdown and direction calls
+  const saved = o.reusePlan ? loadPlan(o.outDir) : undefined;
+  const usageExtra: Usage[] = [];
+  let bd: Breakdown;
+  if (saved) {
+    bd = saved.breakdown;
+    log(`1/3 reusing the saved breakdown (${join(o.outDir, 'breakdown.json')})`);
+  } else {
+    log(`1/3 watching the reference (${dur.toFixed(1)} s)`);
+    const r = await breakdown(critic, o.videoFile, dur, o.outDir);
+    bd = r.bd;
+    usageExtra.push(r.usage);
+    writeFileSync(join(o.outDir, 'breakdown.json'), JSON.stringify(bd, null, 2));
+  }
   log(`  ${bd.shots.length} shots · ${bd.bpm} BPM · ${bd.style}`);
 
   const bpm = Math.min(140, Math.max(90, Math.round(bd.bpm || 120)));
@@ -149,20 +227,25 @@ export async function replicate(llm: LLM, o: ReplicateOptions) {
     const font = (DISPLAY_NAMES as readonly string[]).includes(bd.font ?? '') ? bd.font! : kit.brand.fonts.display;
     kit = { ...kit, brand: { ...kit.brand, ...(roles ? { colors: { ...kit.brand.colors, ...roles } } : {}), fonts: { ...kit.brand.fonts, display: font } } } as typeof kit;
   }
-  log(o.exact ? '2/3 turning the breakdown into a shot-for-shot direction' : '2/3 adapting it to the brand');
-  const dirRes = await llm.json({
-    label: 'adapt', effort: 'high', schema: directionSchema(),
-    system: o.exact
-      ? `You turn a reference motion design film's breakdown into a production direction for an EXACT, shot-for-shot copy. Keep everything: the same shots with the same timing, the same on-screen words (character for character), colours (#RRGGBB), layout and sizes, typography treatment, motion, easing, transitions and energy. Do not adapt it to a brand and do not add a logo or end card the reference does not have. One scene per reference shot, in order; scene beats = shot duration × ${bpm} / 60 (multiples of 0.25). In each scene idea, write every element, its position and size (% of the frame), colour, and every keyframe with its time inside the scene. Name the set piece a shot needs when one of the crafted set pieces matches it (3D logo or type, particles, globe, cylinder…), otherwise none. Fonts: display from ${DISPLAY_NAMES.join(', ')}; serif from ${SERIF_NAMES.join(', ')}. Transitions: ${TRANSITIONS.join(', ')} (prefer "cut" with the reference's transition built into the scenes).`
-      : `You adapt a reference motion design film to a new brand, keeping its craft: the same structure, pacing, shot types, motion language, typography treatment and energy, so a viewer would recognise the style. Replace its copy with the brand's own words (from the brief and facts only; never invent numbers or claims), ${o.keepColors ? "keep the reference's colours" : "use the brand palette in the reference's colour roles"}, and end on the brand (logo, name, site) held still for the final 1.5 s. One scene per reference shot (merge very short shots if needed); scene beats = shot duration × ${bpm} / 60, in multiples of 0.5. Fonts: display from ${DISPLAY_NAMES.join(', ')}; serif from ${SERIF_NAMES.join(', ')}. Transitions: ${TRANSITIONS.join(', ')} (prefer "cut" with the reference's transition built into the scenes).`,
-    turns: [user(
-      text(`REFERENCE BREAKDOWN\n${JSON.stringify(bd, null, 1)}`),
-      o.exact ? text(`PALETTE ROLES FOR THIS COPY (S.colors)\n${JSON.stringify(kit.brand.colors)}`) : text(`BRAND\n${JSON.stringify({ ...o.kit.brand, logo: o.kit.brand.logo ? '(vector mark)' : '(monogram)' })}\nFACTS\n${JSON.stringify(o.kit.facts)}\nBRIEF\n${o.brief}`),
-      text(`Write the direction (music: ${bpm} BPM).`),
-    )],
-  });
-  const raw = parseJson<Direction | Direction[]>(dirRes.text);
-  const d = (Array.isArray(raw) ? raw[0] : raw) as Direction;
+  let d: Direction;
+  if (saved) d = saved.direction;
+  else {
+    log(o.exact ? '2/3 turning the breakdown into a shot-for-shot direction' : '2/3 adapting it to the brand');
+    const dirRes = await llm.json({
+      label: 'adapt', effort: 'high', schema: directionSchema(),
+      system: o.exact
+        ? `You turn a reference motion design film's breakdown into a production direction for an EXACT, shot-for-shot copy. Keep everything: the same shots with the same timing, the same on-screen words (character for character), colours (#RRGGBB), layout and sizes, typography treatment, motion, easing, transitions and energy. Do not adapt it to a brand and do not add a logo or end card the reference does not have. One scene per reference shot, in order; scene beats = shot duration × ${bpm} / 60 (multiples of 0.25). In each scene idea, write every element, its position and size (% of the frame), colour, and every keyframe with its time inside the scene. Name the set piece a shot needs when one of the crafted set pieces matches it (3D logo or type, particles, globe, cylinder…), otherwise none. Fonts: display from ${DISPLAY_NAMES.join(', ')}; serif from ${SERIF_NAMES.join(', ')}. Transitions: ${TRANSITIONS.join(', ')} (prefer "cut" with the reference's transition built into the scenes).`
+        : `You adapt a reference motion design film to a new brand, keeping its craft: the same structure, pacing, shot types, motion language, typography treatment and energy, so a viewer would recognise the style. Replace its copy with the brand's own words (from the brief and facts only; never invent numbers or claims), ${o.keepColors ? "keep the reference's colours" : "use the brand palette in the reference's colour roles"}, and end on the brand (logo, name, site) held still for the final 1.5 s. One scene per reference shot (merge very short shots if needed); scene beats = shot duration × ${bpm} / 60, in multiples of 0.5. Fonts: display from ${DISPLAY_NAMES.join(', ')}; serif from ${SERIF_NAMES.join(', ')}. Transitions: ${TRANSITIONS.join(', ')} (prefer "cut" with the reference's transition built into the scenes).`,
+      turns: [user(
+        text(`REFERENCE BREAKDOWN\n${JSON.stringify(bd, null, 1)}`),
+        o.exact ? text(`PALETTE ROLES FOR THIS COPY (S.colors)\n${JSON.stringify(kit.brand.colors)}`) : text(`BRAND\n${JSON.stringify({ ...o.kit.brand, logo: o.kit.brand.logo ? '(vector mark)' : '(monogram)' })}\nFACTS\n${JSON.stringify(o.kit.facts)}\nBRIEF\n${o.brief}`),
+        text(`Write the direction (music: ${bpm} BPM).`),
+      )],
+    });
+    const raw = parseJson<Direction | Direction[]>(dirRes.text);
+    d = (Array.isArray(raw) ? raw[0] : raw) as Direction;
+    usageExtra.push(dirRes.usage);
+  }
   d.sound = { ...(d.sound ?? { description: bd.sound }), bpm };
   if (o.exact) d.exact = true;
   // reference segment per scene: the shot times in exact mode, else in proportion to the beats
@@ -175,6 +258,17 @@ export async function replicate(llm: LLM, o: ReplicateOptions) {
     acc += s.beats;
     return { from, to: (acc / total) * dur };
   });
+  if (o.exact && bd.frameLog?.length && !saved) {
+    // the coder gets the measured frames of its own shot verbatim
+    d.scenes.forEach((s, i) => {
+      const lines = frameLogFor(bd.frameLog, windows[i].from, windows[i].to);
+      if (lines) s.idea = `${s.idea}\n\nREFERENCE FRAME LOG FOR THIS SHOT (seconds from the scene start; this is ground truth for words, sizes, positions and colours):\n${lines}`;
+    });
+  }
+  if (o.planOnly) {
+    writeFileSync(join(o.outDir, 'direction.json'), JSON.stringify(d, null, 2));
+    return { breakdown: bd, direction: d, windows, usageExtra };
+  }
   const { parts } = await referenceClips(o.videoFile, windows);
   log(`3/3 rebuilding ${d.scenes.length} scenes`);
   // in exact mode the reference's own words are allowed on screen
@@ -196,7 +290,7 @@ export async function replicate(llm: LLM, o: ReplicateOptions) {
       '-map', '[v]', '-map', o.exact ? '0:a?' : '1:a?', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', compare]);
     log(`  side by side (reference | copy): ${compare}`);
   }
-  return { ...res, breakdown: bd, usageExtra: [bdRes.usage, dirRes.usage] };
+  return { ...res, breakdown: bd, usageExtra };
 }
 
 export type { BrandKit };
