@@ -154,7 +154,7 @@ export class Lessons {
 export interface SceneEvidence {
   id: string;
   idea: string;
-  versions: { step: string; score: number; scores?: Record<string, number>; observed?: string; fixes?: string[]; kept?: boolean }[];
+  versions: { step: string; score: number; ssim?: number; scores?: Record<string, number>; observed?: string; fixes?: string[]; kept?: boolean }[];
   tests: { tag: string; problems: string[]; resolved: boolean }[];
 }
 export interface RunEvidence {

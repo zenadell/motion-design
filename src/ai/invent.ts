@@ -485,7 +485,7 @@ export async function invent(llm: LLM, o: InventOptions) {
       // in an exact copy the measured detail differences come first
       c.fixes = [...details, ...(Array.isArray(c.fixes) ? c.fixes : []), ...(exact ? [] : cm.m.flags.map(f => `(measured) ${f}`))];
       const s = critiqueScore(c);
-      sceneEvidence(ev, d.scenes[i].id, d.scenes[i].idea).versions.push({ step: tag, score: s, scores: c.scores, observed: String(c.observed ?? '').slice(0, 600), fixes: c.fixes.slice(0, 6).map(x => String(x).slice(0, 300)) });
+      sceneEvidence(ev, d.scenes[i].id, d.scenes[i].idea).versions.push({ step: tag, score: s, ...(cm.detail?.ssim !== undefined ? { ssim: cm.detail.ssim } : {}), scores: c.scores, observed: String(c.observed ?? '').slice(0, 600), fixes: c.fixes.slice(0, 6).map(x => String(x).slice(0, 300)) });
       return { c, s, clip: cm.clip, detail: cm.detail };
     };
 
@@ -506,10 +506,18 @@ export async function invent(llm: LLM, o: InventOptions) {
       const curWins = (x.winner === 'A' ? 1 : 0) + (y.winner === 'B' ? 1 : 0);
       return nextWins === 2 ? 'next' : curWins === 2 ? 'cur' : nextWins > curWins ? 'next' : curWins > nextWins ? 'cur' : 'tie';
     };
-    /** Accept `next` over `cur`: a head-to-head win, or a tie with a clearly higher rubric score. */
-    const better = async (i: number, cur: { score: number; clip: Buffer }, next: { score: number; clip: Buffer }, tag: string) => {
+    /**
+     * Accept `next` over `cur`: a head-to-head win, or a tie with a clearly
+     * higher rubric score. In an exact copy the measured fidelity (SSIM against
+     * the reference) also counts: it breaks ties, and it vetoes a "win" that
+     * clearly moves the copy away from the reference.
+     */
+    const better = async (i: number, cur: { score: number; clip: Buffer; detail?: Detail }, next: { score: number; clip: Buffer; detail?: Detail }, tag: string) => {
       const v = await pairwise(i, cur.clip, next.clip, tag);
-      return v === 'next' || (v === 'tie' && next.score >= cur.score + 0.5);
+      const a = cur.detail?.ssim, b = next.detail?.ssim;
+      const gain = a !== undefined && b !== undefined ? b - a : 0;
+      if (gain < -0.02) return false;
+      return v === 'next' || (v === 'tie' && (next.score >= cur.score + 0.5 || gain > 0.005));
     };
 
     const history: Record<string, { step: string; score: number }[]> = {};
@@ -556,7 +564,8 @@ export async function invent(llm: LLM, o: InventOptions) {
       let cur = good[0];
       // the rubric score only orders the field; the head-to-head decides between the top two
       if (good.length > 1 && (await attempt(`${s.id} head-to-head`, () => better(i, cur, good[1], 'cands')))) cur = good[1];
-      log(`  ${s.id}: candidates ${good.map(g => g.score).join(' / ')} → kept ${cur.score}`);
+      const fid = (x?: Detail) => (x?.ssim !== undefined ? ` (fidelity ${x.ssim.toFixed(3)})` : '');
+      log(`  ${s.id}: candidates ${good.map(g => g.score).join(' / ')} → kept ${cur.score}${fid(cur.detail)}`);
       for (const v of sceneEvidence(ev, s.id, s.idea).versions) if (v.kept === undefined) v.kept = v.score === cur.score;
       for (let r = 1; r <= (o.rounds ?? 2) && cur.score < target && !overBudget(); r++) {
         const done = await attempt(`${s.id} rewrite ${r}`, async () => {
@@ -573,8 +582,8 @@ export async function invent(llm: LLM, o: InventOptions) {
         if (!done) continue;
         const { ok, cr } = done;
         history[s.id].push({ step: `rewrite ${r}`, score: cr.s });
-        const win = (await attempt(`${s.id} head-to-head`, () => better(i, cur, { score: cr.s, clip: cr.clip }, `r${r}`))) ?? false;
-        log(`  ${s.id}: rewrite ${r} → ${cr.s}${win ? ' (wins head-to-head, kept)' : ` (does not beat ${cur.score} head-to-head, discarded)`}`);
+        const win = (await attempt(`${s.id} head-to-head`, () => better(i, cur, { score: cr.s, clip: cr.clip, detail: cr.detail }, `r${r}`))) ?? false;
+        log(`  ${s.id}: rewrite ${r} → ${cr.s}${fid(cr.detail)}${win ? ' (wins head-to-head, kept)' : ` (does not beat ${cur.score} head-to-head, discarded)`}`);
         const rv = sceneEvidence(ev, s.id, s.idea).versions.at(-1);
         if (rv) rv.kept = win;
         if (win) cur = { code: ok, score: cr.s, critique: cr.c, clip: cr.clip, detail: cr.detail };
@@ -639,7 +648,7 @@ export async function invent(llm: LLM, o: InventOptions) {
         if (!ok) return;
         const cr = await critique(i, await clipOf(i, scenePlan(i, ok)), `film${r}`);
         history[w.id].push({ step: `film fix ${r}`, score: cr.s });
-        const win = await better(i, cur, { score: cr.s, clip: cr.clip }, `film${r}`);
+        const win = await better(i, cur, { score: cr.s, clip: cr.clip, detail: cr.detail }, `film${r}`);
         log(`  ${w.id}: film fix → ${cr.s}${win ? ' (wins head-to-head, kept)' : ' (does not win head-to-head, discarded)'}`);
         const fv = sceneEvidence(ev, w.id, d.scenes[i].idea).versions.at(-1);
         if (fv) fv.kept = win;
@@ -667,7 +676,7 @@ export async function invent(llm: LLM, o: InventOptions) {
     const report = {
       mode: o.reference ? 'replicate' : 'invent', models: { direction: llm.model, code: codeLLM.model, critic: criticLLM.model }, brief: o.brief,
       title: d.title, concept: d.concept, vibe: d.vibe, influences: d.influences, bpm,
-      seconds: plan.sections.reduce((a, s) => a + s.beats, 0) * (60 / bpm), scenes: d.scenes.map((s, i) => ({ id: s.id, beats: s.beats, score: best[i]?.score, history: history[s.id] })),
+      seconds: plan.sections.reduce((a, s) => a + s.beats, 0) * (60 / bpm), scenes: d.scenes.map((s, i) => ({ id: s.id, beats: s.beats, score: best[i]?.score, ...(best[i]?.detail?.ssim !== undefined ? { fidelity: best[i].detail!.ssim } : {}), history: history[s.id] })),
       filmReviews: films.map(r => ({ score: r.score, summary: r.summary })), usage: summarizeUsage(usage), wallSeconds: Math.round((Date.now() - t0) / 1000),
     };
     writeFileSync(f('report.json'), JSON.stringify(report, null, 2));

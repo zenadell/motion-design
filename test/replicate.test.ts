@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { ffmpegPath } from '../src/cli/render';
+import { ssimOf } from '../src/ai/inspect';
 import { frameLogFor, referenceFrames } from '../src/ai/replicate';
 
 describe('replicate: reference stills', () => {
@@ -27,6 +28,11 @@ describe('replicate: reference stills', () => {
       expect(frames[0].jpg.subarray(0, 2).toString('hex')).toBe('ffd8');
       const sof = frames[0].jpg.indexOf(Buffer.from([0xff, 0xc0]));
       expect(frames[0].jpg.readUInt16BE(sof + 7)).toBe(320);
+      // fidelity: a clip against itself is ~identical, against another picture it is not
+      const other = join(dir, 'other.mp4');
+      spawnSync(ffmpegPath(), ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=320x180:rate=30:duration=2', '-pix_fmt', 'yuv420p', other]);
+      expect(await ssimOf(clip, 0, 1, clip)).toBeGreaterThan(0.98);
+      expect((await ssimOf(clip, 0, 1, other))!).toBeLessThan(0.8);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

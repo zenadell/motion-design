@@ -17,6 +17,29 @@ export interface RGB { w: number; h: number; data: Uint8Array }
 export interface Box { x0: number; y0: number; x1: number; y1: number }
 export interface Overshoot { t: number; pct: number; settle: number }
 
+function ffmpegLog(args: string[]): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const p = spawn(ffmpegPath(), ['-hide_banner', ...args], { stdio: ['ignore', 'ignore', 'pipe'] });
+    let err = '';
+    p.stderr.on('data', d => (err += d));
+    p.on('error', reject);
+    p.on('close', code => (code === 0 ? resolve(err) : reject(new Error(`ffmpeg ${code}: ${err.slice(-300)}`))));
+  });
+}
+
+/**
+ * Structural similarity of a render with its reference segment, every frame
+ * (1 = identical): an objective fidelity score that does not depend on a judge.
+ */
+export async function ssimOf(refFile: string, from: number, dur: number, clipFile: string): Promise<number | undefined> {
+  const log = await ffmpegLog([
+    '-ss', from.toFixed(3), '-t', dur.toFixed(3), '-i', refFile, '-i', clipFile,
+    '-lavfi', '[0:v]scale=512:288,fps=24,setsar=1[a];[1:v]scale=512:288,fps=24,setsar=1[b];[b][a]ssim=shortest=1', '-f', 'null', '-',
+  ]);
+  const m = log.match(/All:([\d.]+)/g);
+  return m ? Number(m[m.length - 1].slice(4)) : undefined;
+}
+
 function ffmpeg(args: string[]): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const p = spawn(ffmpegPath(), ['-hide_banner', '-loglevel', 'error', ...args], { stdio: ['ignore', 'pipe', 'pipe'] });
@@ -239,6 +262,8 @@ export interface Detail {
   times: number[];
   lag?: number;
   bounce: { ref: Overshoot[]; copy: Overshoot[] };
+  /** SSIM against the reference segment, every frame (1 = identical). */
+  ssim?: number;
 }
 
 const pct = (x: number) => `${Math.round(x * 100)}%`;
@@ -255,12 +280,13 @@ export async function inspectScene(o: { refFile: string; from: number; to: numbe
     const clipFile = join(dir, 'clip.mp4');
     writeFileSync(clipFile, o.clip);
     const fps = 24, dur = Math.max(0.3, o.to - o.from);
-    const [refM, copyM] = await Promise.all([
+    const [refM, copyM, ssim] = await Promise.all([
       decode(o.refFile, { from: o.from, dur, fps, w: 320, h: 180 }),
       decode(clipFile, { fps, w: 320, h: 180 }),
+      ssimOf(o.refFile, o.from, dur, clipFile).catch(() => undefined),
     ]);
     const n = Math.min(refM.length, copyM.length);
-    if (n < 4) return { report: '', images: [], times: [], bounce: { ref: [], copy: [] } };
+    if (n < 4) return { report: '', images: [], times: [], bounce: { ref: [], copy: [] }, ssim };
     const eRef = energy(refM.slice(0, n)), eCopy = energy(copyM.slice(0, n));
 
     // timing: how far the render's motion is shifted against the reference
@@ -327,10 +353,11 @@ export async function inspectScene(o: { refFile: string; from: number; to: numbe
       lines.push(`Bounce (overshoot of the content's size): reference ${bounce.ref.length ? bl(bounce.ref) : 'none'}; yours ${bounce.copy.length ? bl(bounce.copy) : 'none'}${sp && bounce.copy.length < bounce.ref.length ? ` → pop elements in with a spring like the reference: S.spring(t, ${sp.stiffness}, ${sp.damping})` : ''}`);
     }
     if (lagS !== undefined) lines.push(`Timing: your motion runs ${Math.abs(lagS).toFixed(2)} s ${lagS < 0 ? 'EARLY' : 'LATE'} against the reference → move your keyframes ${Math.abs(lagS).toFixed(2)} s ${lagS < 0 ? 'later' : 'earlier'}`);
+    if (ssim !== undefined) lines.unshift(`Overall fidelity (SSIM of every frame against the reference, 1 = identical): ${ssim.toFixed(3)}`);
     const report = lines.length
       ? `DETAIL MEASUREMENTS (reference vs your render, measured on matched frames; sizes in px at 1920×1080; approximate)\n${lines.join('\n')}`
       : '';
-    return { report, images, times: picked.map(k => k / fps), lag: lagS, bounce };
+    return { report, images, times: picked.map(k => k / fps), lag: lagS, bounce, ssim };
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
