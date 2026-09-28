@@ -103,7 +103,8 @@ export function fitScenes(beats: number[], target: number): number[] {
 export function unverifiedNumbers(code: string, corpus: string, allowed: string[]): string[] {
   const out = new Set<string>();
   for (const m of code.matchAll(/(['"`])((?:\\.|(?!\1)[^\\])*)\1/g)) {
-    const lit = m[2];
+    // escapes are characters, not numbers: "It’s" does not state 2019
+    const lit = m[2].replace(/\\u\{[0-9a-f]+\}|\\u[0-9a-f]{4}|\\x[0-9a-f]{2}/gi, ' ');
     if (!/[a-z]/i.test(lit) && !/[%+]/.test(lit)) continue;
     if (/px|rgba?\(|hsla?\(|#[0-9a-f]{3,8}\b|deg|blur\(|contrast\(|\bms\b|^\s*\d+\s*$/i.test(lit)) continue;
     for (const n of lit.replace(/\$\{[^}]*\}/g, '').match(/\d+(?:[.,]\d+)?/g) ?? []) {

@@ -49,6 +49,10 @@ describe('invent helpers', () => {
     const r = unverifiedNumbers(code, 'we have 40+ launches', ['120']);
     expect(r).toEqual(['"SINCE 2019" states 2019']);
   });
+  it('does not read escape sequences as numbers', () => {
+    const code = 'g.fillText("It\\u2019s Very Simple.", 0, 0); g.fillText(\'caf\\xe9 \\u{1F600}\', 0, 0);';
+    expect(unverifiedNumbers(code, '', [])).toEqual([]);
+  });
 });
 
 import { motionReport } from '../src/ai/metrics';
