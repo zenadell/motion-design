@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { loadBrandKit } from '../ai/brand-kit';
 import { invent } from '../ai/invent';
@@ -31,6 +31,8 @@ export interface BakeoffOptions {
   parallel?: number;
   outDir: string;
   log?: (s: string) => void;
+  /** Reuse a model's finished output from an earlier run in the same outDir (default true). */
+  reuse?: boolean;
   /** Model factory (tests inject fakes); default: llmFor. */
   llm?: (id: string, log: (s: string) => void) => LLM;
 }
@@ -81,6 +83,21 @@ export async function bakeoff(o: BakeoffOptions) {
       const tag = e.model.split('/').pop()!;
       const t0 = Date.now();
       e.dir = join(o.outDir, slug(e.model));
+      const done = join(e.dir, 'report.json');
+      if ((o.reuse ?? true) && existsSync(done) && existsSync(join(e.dir, 'plan.json'))) {
+        const rep = JSON.parse(readFileSync(done, 'utf8')) as { scenes: { id: string; score?: number }[]; usage: { byStep: { model: string; usd?: number }[] }; wallSeconds?: number };
+        const pv = validatePlan(JSON.parse(readFileSync(join(e.dir, 'plan.json'), 'utf8')));
+        if (pv.ok) {
+          plans.set(e.model, pv.plan);
+          e.scores = Object.fromEntries(rep.scenes.filter(s => o.scenes.includes(s.id)).map(s => [s.id, s.score]));
+          const sum = (f: (m: string) => boolean) => rep.usage.byStep.filter(x => f(x.model)).reduce((a, x) => a + (x.usd ?? 0), 0);
+          e.codeUsd = sum(m => m === e.model);
+          e.criticUsd = sum(m => m !== e.model);
+          e.seconds = rep.wallSeconds;
+          log(`[${tag}] reusing the finished run in ${e.dir}`);
+          continue;
+        }
+      }
       try {
         const coder = (o.llm ?? llmFor)(e.model, s => log(`[${tag}] ${s}`));
         const res = await invent(o.critic, {

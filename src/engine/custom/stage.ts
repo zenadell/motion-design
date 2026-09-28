@@ -27,10 +27,28 @@ import { bloom, camera, drawOn, fxFactory, glowAt, ICON_LIST, iconPoints, iconPo
 const SHADOW = 'window,document,globalThis,self,top,parent,frames,fetch,XMLHttpRequest,WebSocket,EventSource,navigator,location,localStorage,sessionStorage,indexedDB,Date,performance,setTimeout,setInterval,requestAnimationFrame,queueMicrotask,importScripts,Worker';
 const PRELUDE = `"use strict"; const Math = __M; const ${SHADOW.split(',').map(n => `${n} = undefined`).join(', ')};\n`;
 
+const FN_START = /^\s*(?:async\s+)?(?:function\b|\([^)]*\)\s*=>|[\w$]+\s*=>)/;
+/**
+ * Models sometimes return a whole function (`(g, t, S) => { … }`,
+ * `function draw(g, t, S) { … }`) where a body is expected; as a body that
+ * would only create the function and draw nothing. If the code is exactly
+ * one function expression, call it with the real arguments instead.
+ */
+export function asBody(body: string, params: string[]): string {
+  if (!FN_START.test(body)) return body;
+  const expr = body.trim().replace(/;\s*$/, '');
+  try {
+    new Function(`return (${expr}\n)`);
+  } catch {
+    return body;
+  }
+  return `return (${expr}\n)(${params.join(', ')});`;
+}
+
 /** Compile a code body into a function. Throws SyntaxError with the label in the message. */
 export function compile(params: string[], body: string, label: string): (...a: unknown[]) => unknown {
   try {
-    return new Function(...params, '__M', `${PRELUDE}${body}\n//# sourceURL=${label}.js`) as (...a: unknown[]) => unknown;
+    return new Function(...params, '__M', `${PRELUDE}${asBody(body, params)}\n//# sourceURL=${label}.js`) as (...a: unknown[]) => unknown;
   } catch (e) {
     throw new SyntaxError(`${label}: ${(e as Error).message}`);
   }

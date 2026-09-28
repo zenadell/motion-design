@@ -114,3 +114,20 @@ describe('beat precision', () => {
     expect(beatReport(frames.map(f => (f.t === 0.8 ? { ...f, motion: 0.005 } : f)), 0.5).flags).toEqual([]);
   });
 });
+
+import { asBody } from '../src/engine/custom/stage';
+describe('code bodies', () => {
+  it('calls a whole function returned where a body was expected', () => {
+    const f = compile(['a', 'b'], '(x, y) => { return x + y; }', 't') as (a: number, b: number, M: unknown) => number;
+    expect(f(2, 3, Math)).toBe(5);
+    const g = compile(['a', 'b'], 'function draw(p, q) {\n  return p * q;\n};', 't') as (a: number, b: number, M: unknown) => number;
+    expect(g(2, 3, Math)).toBe(6);
+  });
+  it('leaves real bodies alone', () => {
+    const body = 'function helper(v) { return v * 2; }\nreturn helper(a);';
+    expect(asBody(body, ['a'])).toBe(body);
+    expect(asBody('a.fill();', ['a'])).toBe('a.fill();');
+    const f = compile(['a'], body, 't') as (a: number, M: unknown) => number;
+    expect(f(4, Math)).toBe(8);
+  });
+});

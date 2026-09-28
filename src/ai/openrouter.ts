@@ -18,7 +18,7 @@ export interface OpenRouterOptions {
   model: string;
   apiKey?: string;
   retries?: number;
-  /** Seconds before a request is abandoned (long code replies can take minutes). */
+  /** Seconds before a request is abandoned. Reasoning models can think for 10+ minutes before a long code reply. */
   timeout?: number;
   log?: (s: string) => void;
   /** For tests. */
@@ -76,7 +76,7 @@ export class OpenRouter implements LLM {
     this.key = key;
     this.model = o.model;
     this.retries = o.retries ?? 4;
-    this.timeout = (o.timeout ?? 600) * 1000;
+    this.timeout = (o.timeout ?? Number(process.env.OPENROUTER_TIMEOUT ?? 1800)) * 1000;
     this.log = o.log ?? (() => {});
     this.doFetch = o.fetch ?? fetch;
   }
@@ -134,8 +134,9 @@ export class OpenRouter implements LLM {
           schema = undefined;
           continue;
         }
-        const transient = status === undefined || status === 408 || status === 429 || status >= 500 || /no text/.test(msg);
-        if (!transient || attempt >= this.retries) throw e instanceof LLMError ? e : new LLMError(`OpenRouter ${status ?? ''} ${msg}`.trim(), status);
+        const timedOut = /aborted due to timeout|TimeoutError/i.test(msg) || (e as Error).name === 'TimeoutError';
+        const transient = status === undefined || timedOut || status === 408 || status === 429 || status >= 500 || /no text/.test(msg);
+        if (!transient || attempt >= (timedOut ? 1 : this.retries)) throw e instanceof LLMError ? e : new LLMError(`OpenRouter ${status ?? ''} ${msg}`.trim(), status);
         const wait = Math.min(30_000, 2000 * 2 ** attempt) * (0.75 + Math.random() * 0.5);
         this.log(`  ${req.label}: ${status ?? 'network'} error${msg ? ` (${msg.slice(0, 80)})` : ''}, retrying in ${(wait / 1000).toFixed(1)} s`);
         await sleep(wait);
