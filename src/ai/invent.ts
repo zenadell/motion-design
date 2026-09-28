@@ -9,11 +9,12 @@ import { DISPLAY_NAMES, SERIF_NAMES } from '../plan/fonts';
 import type { Plan, PlanInput } from '../plan/schema';
 import { validatePlan } from '../plan/validate';
 import { factCorpus, type BrandKit } from './brand-kit';
+import { inspectScene, referenceStills, type Detail } from './inspect';
 import { learn, newEvidence, sceneEvidence, type Lessons, type Role } from './lessons';
 import { beatReport, motionReport, type MotionReport } from './metrics';
-import { parseJson, summarizeUsage, text, user, video, type Effort, type LLM, type Part, type Usage } from './llm';
+import { image, parseJson, summarizeUsage, text, user, video, type Effort, type LLM, type Part, type Usage } from './llm';
 import {
-  coderSystem, conceptsSchema, conceptsUser, critiqueScore, developUser, directionSchema, directorSystem, directorUser, filmCriticSchema, filmCriticSystem, fixUser, libSchema, libUser,
+  coderSystem, conceptsSchema, conceptsUser, critiqueScore, detailCriticSystem, detailSchema, developUser, directionSchema, directorSystem, directorUser, filmCriticSchema, filmCriticSystem, fixUser, libSchema, libUser,
   pairSchema, pairSystem, pickSchema, pickSystem, type Concept,
   rewriteUser, sceneCriticSchema, sceneCriticSystem, sceneCriticUser, sceneSchema, sceneUser,
   type Direction, type FilmCritique, type SceneCritique,
@@ -64,7 +65,11 @@ export interface InventOptions {
   /** Reference films that define the quality bar: videos (shown to director and critics) and their source code (shown to the coder). */
   bar?: { videos: Buffer[]; code?: string };
   /** Extra context for every scene prompt and critique (replicate mode: the reference breakdown). */
-  reference?: { note: string; clips?: Buffer[]; exact?: boolean };
+  reference?: {
+    note: string; clips?: Buffer[]; exact?: boolean;
+    /** The reference video and each scene's window in it: exact copies are inspected against it frame by frame. */
+    source?: { file: string; windows: { from: number; to: number }[] };
+  };
   /** The platform's memory of past mistakes: relevant lessons go into every prompt, and the run is reviewed afterwards. */
   lessons?: Lessons;
   /** Skip the post-run review (lessons are still applied). */
@@ -366,7 +371,7 @@ export async function invent(llm: LLM, o: InventOptions) {
       return null;
     };
     /** Render a scene's clip (what the critic watches) and measure coverage and motion on the same frames. */
-    const clipOf = async (i: number, input: PlanInput): Promise<{ clip: Buffer; m: MotionReport; beat: ReturnType<typeof beatReport> }> => {
+    const clipOf = async (i: number, input: PlanInput): Promise<{ clip: Buffer; m: MotionReport; beat: ReturnType<typeof beatReport>; detail?: Detail }> => {
       const v = validatePlan(input);
       if (!v.ok) throw new Error('clip of an invalid plan');
       const reel = await openReel(v.plan, browser);
@@ -378,35 +383,80 @@ export async function invent(llm: LLM, o: InventOptions) {
         const hold = last ? reel.duration - 1.5 : Infinity;
         const m = motionReport(samples, hold);
         const br = beatReport(perFrame, 60 / bpm, hold);
-        return { clip, m: { ...m, flags: [...m.flags, ...br.flags] }, beat: br };
+        // exact copy: measure the render against the reference on matched frames
+        let detail: Detail | undefined;
+        const src = o.reference?.source, win = src?.windows[i];
+        if (exact && src && win) {
+          try {
+            detail = await inspectScene({
+              refFile: src.file, from: win.from, to: win.to, clip,
+              stillAt: async t => dataUrlToBuffer(await reel.page.evaluate(x => window.__reel!.still!(x, 1), Math.min(t, reel.duration - 1e-3))),
+            });
+          } catch (e) {
+            log(`    ${d.scenes[i].id}: detail inspection failed (${String((e as Error).message ?? e).slice(0, 120)})`);
+          }
+        }
+        return { clip, m: { ...m, flags: [...m.flags, ...br.flags] }, beat: br, detail };
       } finally {
         await reel.page.context().close();
       }
     };
     /** Replicate mode: the reference segment this scene must match, shown to the coder. */
-    const refTarget = (i: number): Part[] => {
+    const stillsCache = new Map<number, Promise<{ t: number; jpg: Buffer }[]>>();
+    const refTarget = async (i: number): Promise<Part[]> => {
       const clip = o.reference?.clips?.[i];
       if (!clip) return [];
-      return [text(o.reference?.exact
+      const parts: Part[] = [text(o.reference?.exact
         ? 'THE TARGET: the reference segment this scene must reproduce EXACTLY (same composition, sizes, positions, colours, words, timing and motion). Match it frame for frame:'
         : 'THE REFERENCE SEGMENT this scene is modelled on (match its craft, composition and motion):'), video(clip, 12)];
+      // exact copy: sharp stills too, where small things (gaps, radii, glow edges, text size) are readable
+      const src = o.reference?.source, win = src?.windows[i];
+      if (exact && src && win) {
+        if (!stillsCache.has(i)) stillsCache.set(i, referenceStills(src.file, win.from, win.to).catch(() => []));
+        const stills = await stillsCache.get(i)!;
+        if (stills.length) parts.push(text('SHARP STILLS OF THE TARGET (match every small detail: gaps between elements, corner radii, glow size and softness, shadows, text size, weight and spacing):'), ...stills.flatMap(s => [text(`t=${s.t.toFixed(2)} s from the scene start`), image(s.jpg, 'image/jpeg')]));
+      }
+      return parts;
+    };
+    /** Exact copy: a pixel-level review of the measured, matched frames; its findings lead the fixes. */
+    const detailReview = async (i: number, detail: Detail, tag: string): Promise<string[]> => {
+      if (!detail.report && !detail.images.length) return [];
+      try {
+        const r = await ask<{ differences?: { element: string; reference: string; copy: string; fix: string; severity?: string }[] }>(criticLLM, `detail ${d.scenes[i].id} ${tag}`, detailCriticSystem(), [
+          `SCENE "${d.scenes[i].id}": ${d.scenes[i].title}\n${detail.report}`,
+          ...detail.images.flatMap(im => [text(im.label), image(im.jpg, 'image/jpeg')]),
+          L('critic', `${sceneTask(i)} detail spacing glow size bounce`) || 'List the differences.',
+        ], detailSchema(), 'medium');
+        const rank = { high: 0, medium: 1, low: 2 } as Record<string, number>;
+        return (r.differences ?? [])
+          .sort((a, b) => (rank[a.severity ?? 'medium'] ?? 1) - (rank[b.severity ?? 'medium'] ?? 1))
+          .slice(0, 8)
+          .map(x => `(detail) ${x.element}: reference ${x.reference}; yours ${x.copy} → ${x.fix}`);
+      } catch (e) {
+        log(`    ${d.scenes[i].id}: detail review failed (${String((e as Error).message ?? e).slice(0, 120)})`);
+        return [];
+      }
     };
     const measured = (m: MotionReport, b?: ReturnType<typeof beatReport>) =>
       `MEASURED ON THE RENDER (objective): average frame coverage ${Math.round(m.coverage * 100)}%, empty frames ${Math.round(m.emptyShare * 100)}%, mean motion ${(m.motion * 1000).toFixed(1)}‰ per 1/12 s${b ? `, beat precision ${Math.round(b.sync * 100)}% of ${b.hardChanges} hard changes on the 16th grid` : ''}${m.flags.length ? `\nProblems: ${m.flags.join(' ')}` : ' (no measured problems)'}`;
-    const critique = async (i: number, cm: { clip: Buffer; m: MotionReport; beat?: ReturnType<typeof beatReport> }, tag: string) => {
+    const critique = async (i: number, cm: { clip: Buffer; m: MotionReport; beat?: ReturnType<typeof beatReport>; detail?: Detail }, tag: string) => {
       const refClip = o.reference?.clips?.[i];
-      const c = await ask<SceneCritique>(criticLLM, `critique ${d.scenes[i].id} ${tag}`, sceneCriticSystem(), [
-        ...barParts(3),
-        sceneCriticUser(d, i) + refNote + L('critic', sceneTask(i)),
-        ...(refClip ? [text('REFERENCE SEGMENT (the target to match):'), video(refClip, 12)] : []),
-        text('RENDERED SCENE:'), video(cm.clip, 12),
-        text(measured(cm.m, cm.beat)),
-      ], sceneCriticSchema(), 'medium');
-      // measured problems always reach the rewrite, even if the critic did not list them (not for an exact copy: the reference decides)
-      c.fixes = [...(Array.isArray(c.fixes) ? c.fixes : []), ...(exact ? [] : cm.m.flags.map(f => `(measured) ${f}`))];
+      const [c, details] = await Promise.all([
+        ask<SceneCritique>(criticLLM, `critique ${d.scenes[i].id} ${tag}`, sceneCriticSystem(), [
+          ...barParts(3),
+          sceneCriticUser(d, i) + refNote + L('critic', sceneTask(i)),
+          ...(refClip ? [text('REFERENCE SEGMENT (the target to match):'), video(refClip, 12)] : []),
+          text('RENDERED SCENE:'), video(cm.clip, 12),
+          text(measured(cm.m, cm.beat) + (cm.detail?.report ? `\n\n${cm.detail.report}` : '')),
+        ], sceneCriticSchema(), 'medium'),
+        cm.detail ? detailReview(i, cm.detail, tag) : Promise.resolve([] as string[]),
+      ]);
+      // measured problems always reach the rewrite, even if the critic did not list them (not for an exact copy: the reference decides);
+      // in an exact copy the measured detail differences come first
+      c.fixes = [...details, ...(Array.isArray(c.fixes) ? c.fixes : []), ...(exact ? [] : cm.m.flags.map(f => `(measured) ${f}`))];
       const s = critiqueScore(c);
-      sceneEvidence(ev, d.scenes[i].id, d.scenes[i].idea).versions.push({ step: tag, score: s, scores: c.scores, observed: String(c.observed ?? '').slice(0, 600), fixes: c.fixes.slice(0, 4).map(x => String(x).slice(0, 300)) });
-      return { c, s, clip: cm.clip };
+      sceneEvidence(ev, d.scenes[i].id, d.scenes[i].idea).versions.push({ step: tag, score: s, scores: c.scores, observed: String(c.observed ?? '').slice(0, 600), fixes: c.fixes.slice(0, 6).map(x => String(x).slice(0, 300)) });
+      return { c, s, clip: cm.clip, detail: cm.detail };
     };
 
     /**
@@ -433,7 +483,11 @@ export async function invent(llm: LLM, o: InventOptions) {
     };
 
     const history: Record<string, { step: string; score: number }[]> = {};
-    const best: { code: SceneCode; score: number; critique: SceneCritique; clip: Buffer }[] = new Array(d.scenes.length);
+    const best: { code: SceneCode; score: number; critique: SceneCritique; clip: Buffer; detail?: Detail }[] = new Array(d.scenes.length);
+    /** Exact copy: the measured comparison of the current version, shown to the coder with the review. */
+    const detailParts = (dt?: Detail): Part[] => (dt && (dt.report || dt.images.length)
+      ? [text(`DETAIL COMPARISON OF YOUR CURRENT VERSION WITH THE REFERENCE (fix every difference you see here, however small)\n${dt.report}`), ...dt.images.flatMap(im => [text(im.label), image(im.jpg, 'image/jpeg')])]
+      : []);
     const fromCurrent = !!o.resume && !o.resume.fresh;
     log(`3/6 scenes: ${fromCurrent ? 'the current version' : `${o.candidates ?? 2} candidates`} each, then up to ${o.rounds ?? 2} watch → rewrite rounds`);
     const todo = o.resume ? d.scenes.filter(s => o.resume!.only.includes(s.id)) : d.scenes;
@@ -444,26 +498,26 @@ export async function invent(llm: LLM, o: InventOptions) {
         ? [await (async () => {
             const cr = await critique(i, await clipOf(i, scenePlan(i, scenes[i])), 'current');
             history[s.id].push({ step: 'current', score: cr.s });
-            return { code: scenes[i], score: cr.s, critique: cr.c, clip: cr.clip };
+            return { code: scenes[i], score: cr.s, critique: cr.c, clip: cr.clip, detail: cr.detail };
           })()]
         : await Promise.all(Array.from({ length: o.candidates ?? 2 }, async (_, k) => {
-        const r = await ask<SceneCode>(codeLLM, `code ${s.id} #${k + 1}`, coder(), [sceneUser(d, lib, i, bpm) + refNote + L('coder', sceneTask(i)) + (k ?`\n\n(Candidate ${k + 1}: take a clearly different creative approach to the same brief.)` : ''), ...refTarget(i)], sceneSchema(), 'high');
+        const r = await ask<SceneCode>(codeLLM, `code ${s.id} #${k + 1}`, coder(), [sceneUser(d, lib, i, bpm) + refNote + L('coder', sceneTask(i)) + (k ?`\n\n(Candidate ${k + 1}: take a clearly different creative approach to the same brief.)` : ''), ...(await refTarget(i))], sceneSchema(), 'high');
         const ok = await testFix(i, cleanScene(r), `#${k + 1}`);
         if (!ok) return null;
         const cr = await critique(i, await clipOf(i, scenePlan(i, ok)), `#${k + 1}`);
         history[s.id].push({ step: `candidate ${k + 1}`, score: cr.s });
-        return { code: ok, score: cr.s, critique: cr.c, clip: cr.clip };
+        return { code: ok, score: cr.s, critique: cr.c, clip: cr.clip, detail: cr.detail };
       }));
       let good = cands.filter((x): x is NonNullable<typeof x> => !!x).sort((a, b) => b.score - a.score);
       // every candidate failed its tests: write fresh ones (a different, simpler approach) before giving up on the film
       for (let k = 1; k <= 2 && !good.length; k++) {
         log(`  ${s.id}: no working version yet → fresh attempt ${k}`);
-        const r = await ask<SceneCode>(codeLLM, `code ${s.id} retry ${k}`, coder(), [sceneUser(d, lib, i, bpm) + refNote + L('coder', `${sceneTask(i)} code error guard`) + `\n\n(Earlier versions of this scene kept failing the engine's tests: ${(lastProblems[s.id] ?? []).slice(0, 4).join(' | ') || 'errors'}. Write it again from scratch, robustly: guard every value that can go negative or undefined, clamp times, keep it within the frame budget.)`], sceneSchema(), 'high');
+        const r = await ask<SceneCode>(codeLLM, `code ${s.id} retry ${k}`, coder(), [sceneUser(d, lib, i, bpm) + refNote + L('coder', `${sceneTask(i)} code error guard`) + `\n\n(Earlier versions of this scene kept failing the engine's tests: ${(lastProblems[s.id] ?? []).slice(0, 4).join(' | ') || 'errors'}. Write it again from scratch, robustly: guard every value that can go negative or undefined, clamp times, keep it within the frame budget.)`, ...(await refTarget(i))], sceneSchema(), 'high');
         const ok = await testFix(i, cleanScene(r), `retry${k}`);
         if (!ok) continue;
         const cr = await critique(i, await clipOf(i, scenePlan(i, ok)), `retry${k}`);
         history[s.id].push({ step: `retry ${k}`, score: cr.s });
-        good = [{ code: ok, score: cr.s, critique: cr.c, clip: cr.clip }];
+        good = [{ code: ok, score: cr.s, critique: cr.c, clip: cr.clip, detail: cr.detail }];
       }
       if (!good.length) throw new Error(`no working version of scene "${s.id}": ${(lastProblems[s.id] ?? []).slice(0, 3).join(' | ')}`);
       let cur = good[0];
@@ -474,8 +528,9 @@ export async function invent(llm: LLM, o: InventOptions) {
       for (let r = 1; r <= (o.rounds ?? 2) && cur.score < target && !overBudget(); r++) {
         const rw = await ask<SceneCode>(codeLLM, `rewrite ${s.id} · ${r}`, coder(), [
           rewriteUser(d, lib, i, bpm, cur.code, cur.critique, cur.score) + refNote + L('coder', `${sceneTask(i)} ${cur.critique.fixes.join(' ')}`),
-          ...refTarget(i),
+          ...(await refTarget(i)),
           text('THE CLIP THE REVIEW IS ABOUT (your current version):'), video(cur.clip, 12),
+          ...detailParts(cur.detail),
         ], sceneSchema(), 'high');
         const ok = await testFix(i, cleanScene(rw, cur.code), `r${r}`);
         if (!ok) continue;
@@ -485,7 +540,7 @@ export async function invent(llm: LLM, o: InventOptions) {
         log(`  ${s.id}: rewrite ${r} → ${cr.s}${win ? ' (wins head-to-head, kept)' : ` (does not beat ${cur.score} head-to-head, discarded)`}`);
         const rv = sceneEvidence(ev, s.id, s.idea).versions.at(-1);
         if (rv) rv.kept = win;
-        if (win) cur = { code: ok, score: cr.s, critique: cr.c, clip: cr.clip };
+        if (win) cur = { code: ok, score: cr.s, critique: cr.c, clip: cr.clip, detail: cr.detail };
       }
       best[i] = cur;
       scenes[i] = cur.code;
@@ -541,6 +596,7 @@ export async function invent(llm: LLM, o: InventOptions) {
         const rw = await ask<SceneCode>(codeLLM, `film fix ${w.id} · ${r}`, coder(), [
           rewriteUser(d, lib, i, bpm, cur.code, crit, cur.score) + refNote + L('coder', `${sceneTask(i)} ${w.fix}`),
           text('THE CLIP THE REVIEW IS ABOUT:'), video(cur.clip, 12),
+          ...detailParts(cur.detail),
         ], sceneSchema(), 'high');
         const ok = await testFix(i, cleanScene(rw, cur.code), `film${r}`);
         if (!ok) return;
@@ -550,7 +606,7 @@ export async function invent(llm: LLM, o: InventOptions) {
         log(`  ${w.id}: film fix → ${cr.s}${win ? ' (wins head-to-head, kept)' : ' (does not win head-to-head, discarded)'}`);
         const fv = sceneEvidence(ev, w.id, d.scenes[i].idea).versions.at(-1);
         if (fv) fv.kept = win;
-        if (win) { best[i] = { code: ok, score: cr.s, critique: cr.c, clip: cr.clip }; scenes[i] = ok; }
+        if (win) { best[i] = { code: ok, score: cr.s, critique: cr.c, clip: cr.clip, detail: cr.detail }; scenes[i] = ok; }
       });
       plan = await whole();
     }

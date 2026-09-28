@@ -209,6 +209,18 @@ motion replicate clip.mp4 --exact --model deepseek/deepseek-v4.1-flash --critic-
 
 In exact mode each scene's idea ends with its shot's slice of the frame log, as ground truth for the coder and the critics.
 
+**The detail inspector.** A critic watching a 640-px clip judges the overall impression. It misses the small things that separate a copy from the original: an 8-px gutter between cards, a glow five times too big, a pop-in that should bounce. So in exact mode every render is also measured against its reference segment on matched frames:
+
+- **Size:** the content box of each frame, e.g. "yours is 1.65× as wide".
+- **Glow:** the area and colour of pale coloured pixels (glow, haze, tinted shadows), e.g. "yours is 15× larger: tighten it".
+- **Gutters:** the longest gutters between elements. This reading is rough, because light cards on a light background can hide theirs.
+- **Bounce:** spring overshoot on pop-ins, from the size of the content over time, converted to matching `S.spring(t, stiffness, damping)` settings.
+- **Timing:** how early or late the motion runs, from cross-correlating frame-to-frame change.
+
+The inspector picks the moments where the reference holds still and the two differ most. For each it builds a full-resolution side-by-side still (reference | copy), plus a zoomed crop of the content or of the area that differs most. A detail critic reads the measurements and stills and lists every difference with numbers, e.g. "gap between the card columns: reference ≈ 20 px, copy 0 → leave a 20 px gutter". Those findings lead the fixes. The coder's rewrite prompt includes the same stills. From its first draft the coder also gets three sharp stills of the target, alongside the small clip.
+
+`motion inspect <replicate-dir> --reference ref.mp4 [--scenes id,…]` runs the inspector on a finished copy without calling a model. It writes `report.txt` and the side-by-side stills for each scene.
+
 Check the plan before paying for the rebuild: `--plan-only` stops after `breakdown.json` and `direction.json` (about $0.12 for a 16-s clip), and `--reuse-plan` then rebuilds from those files. You can also edit them first.
 
 Models that cannot watch video (GPT, DeepSeek) are shown 8 evenly spaced still frames of every clip instead; the breakdown itself is written by the critic model, so give it one that watches video.

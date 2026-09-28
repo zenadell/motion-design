@@ -192,6 +192,20 @@ ${craft}`,
   }
 }
 
+/** The reference segment of each scene: the shot times in exact mode, else in proportion to the beats. */
+export function sceneWindows(bd: Breakdown, d: Direction, dur: number, exact: boolean): { from: number; to: number }[] {
+  const total = d.scenes.reduce((a, s) => a + s.beats, 0) || 1;
+  const shots = bd.shots ?? [];
+  let acc = 0;
+  return d.scenes.map((s, i) => {
+    const from = (acc / total) * dur;
+    acc += s.beats;
+    const sh = shots[i];
+    if (exact && shots.length === d.scenes.length && Number.isFinite(sh?.start) && sh.end > sh.start) return { from: sh.start, to: Math.min(dur, sh.end) };
+    return { from, to: (acc / total) * dur };
+  });
+}
+
 function loadPlan(dir: string): { breakdown: Breakdown; direction: Direction } | undefined {
   const bf = join(dir, 'breakdown.json'), df = join(dir, 'direction.json');
   if (!existsSync(bf) || !existsSync(df)) return undefined;
@@ -248,16 +262,8 @@ export async function replicate(llm: LLM, o: ReplicateOptions) {
   }
   d.sound = { ...(d.sound ?? { description: bd.sound }), bpm };
   if (o.exact) d.exact = true;
-  // reference segment per scene: the shot times in exact mode, else in proportion to the beats
-  const total = d.scenes.reduce((a, s) => a + s.beats, 0) || 1;
-  let acc = 0;
   const shots = bd.shots ?? [];
-  const windows = d.scenes.map((s, i) => {
-    if (o.exact && shots.length === d.scenes.length && Number.isFinite(shots[i]?.start) && shots[i].end > shots[i].start) return { from: shots[i].start, to: Math.min(dur, shots[i].end) };
-    const from = (acc / total) * dur;
-    acc += s.beats;
-    return { from, to: (acc / total) * dur };
-  });
+  const windows = sceneWindows(bd, d, dur, !!o.exact);
   if (o.exact && bd.frameLog?.length && !saved) {
     // the coder gets the measured frames of its own shot verbatim
     d.scenes.forEach((s, i) => {
@@ -275,7 +281,7 @@ export async function replicate(llm: LLM, o: ReplicateOptions) {
   const words = shots.flatMap(s => s.text ?? []).join('\n');
   const res = await invent(llm, {
     ...o, kit, brief: o.exact ? `${o.brief}\n${words}` : o.brief, direction: d, bpm, seconds: Math.round(dur * 2) / 2,
-    reference: { note: JSON.stringify({ summary: bd.summary, style: bd.style, typography: bd.typography, motion: bd.motion, texture: bd.texture, sound: bd.sound }), clips: parts, exact: o.exact },
+    reference: { note: JSON.stringify({ summary: bd.summary, style: bd.style, typography: bd.typography, motion: bd.motion, texture: bd.texture, sound: bd.sound }), clips: parts, exact: o.exact, ...(o.exact ? { source: { file: o.videoFile, windows } } : {}) },
   });
   if (res.video) {
     // the reference's own soundtrack (exact mode) and a side-by-side comparison

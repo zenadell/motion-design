@@ -304,6 +304,46 @@ export function critiqueScore(c: SceneCritique): number {
   return Math.round((0.7 * mean + 0.3 * Math.min(...v)) * 10) / 10;
 }
 
+// ── Detail review (exact copies) ────────────────────────────────────────────
+
+export function detailCriticSystem(): string {
+  return `You are a pixel-level QA reviewer checking an exact copy of a motion design reference. The overall shot is already roughly right; your job is the small things a quick look misses, because they are what separates a copy from the original.
+
+You get measurements taken on matched frames (content size, gaps between elements, how much of the frame is covered by pale coloured glow or haze, spring overshoot, timing offset) and side-by-side stills: REFERENCE on the left, the COPY on the right, at the same moment, some zoomed in on the content.
+
+Compare them closely and list every difference, most noticeable first. Look especially at:
+- spacing: gaps and gutters between cards, buttons and text lines; margins and padding inside elements
+- sizes and positions of every element (px at 1920×1080 or % of the frame), and the overall scale of the layout
+- corner radii, borders, drop shadows (offset, blur, darkness)
+- glow and haze: radius, softness, colour and intensity around text, buttons and bars (a glow that floods the frame where the reference hugs the element is a major difference)
+- blur: motion blur or focus blur on entering elements
+- text: size, weight, letter spacing, line spacing, colour
+- motion character from the measurements: bounce (spring overshoot) on pop-ins, easing, and whether the copy runs early or late
+
+Each difference gets the reference value, the copy's value and a concrete fix with numbers (e.g. "gap between the two card columns: reference ≈ 14 px, copy 0 px → leave a 14 px gutter"; "pop-in: reference overshoots ≈ 6% and settles in 0.3 s → scale with S.spring(t, 290, 23)"). Report only what you can see or what the measurements show; never invent differences.`;
+}
+
+export const detailSchema = () => ({
+  type: 'object',
+  properties: {
+    differences: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          element: { type: 'string', description: 'which element or aspect (e.g. "gap between cards", "search bar glow", "Pined pill pop-in")' },
+          reference: { type: 'string', description: 'what the reference does, with numbers' },
+          copy: { type: 'string', description: 'what the copy does, with numbers' },
+          fix: { type: 'string', description: 'the concrete change, with numbers' },
+          severity: { type: 'string', enum: ['high', 'medium', 'low'] },
+        },
+        required: ['element', 'reference', 'copy', 'fix', 'severity'],
+      },
+    },
+  },
+  required: ['differences'],
+});
+
 export function sceneCriticUser(d: Direction, i: number): string {
   const s = d.scenes[i];
   return `DIRECTION (film)

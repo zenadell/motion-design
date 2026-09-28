@@ -10,7 +10,9 @@ import { summarizeUsage, type LLM, type Usage } from '../ai/llm';
 import { loadBar } from '../ai/bar';
 import { invent } from '../ai/invent';
 import { defaultLessonsPath, evidenceFromRun, learn, Lessons, weight } from '../ai/lessons';
-import { replicate } from '../ai/replicate';
+import { inspectScene } from '../ai/inspect';
+import { replicate, sceneWindows, videoDuration } from '../ai/replicate';
+import { renderClips } from './clip';
 import { make } from '../ai/pipeline';
 import { Planner } from '../ai/planner';
 import { review } from '../ai/qa';
@@ -18,7 +20,7 @@ import { ReplayLLM } from '../ai/replay';
 import { scrapeSite } from '../ai/scrape';
 import { vectorizeLogo } from '../ai/vectorize';
 import { formatIssues, validatePlan } from '../plan/validate';
-import { launch } from './browser';
+import { dataUrlToBuffer, launch, openReel } from './browser';
 
 // CLI commands that involve a model (plus `scrape`, which doesn't but feeds one).
 
@@ -249,6 +251,40 @@ export async function runAi(cmd: string, pos: string[], flags: Flags): Promise<b
       printUsage([...res.usageExtra, ...res.usage]);
       log(`  scene scores: ${res.scores.join(' · ')}${res.films.length ? ` · film ${res.films.map(f => f.score).join(' → ')}/10` : ''}`);
       console.log(`✓ ${res.video ?? join(dir, 'plan.json')} — "${res.direction.title}"`);
+      return true;
+    }
+    case 'inspect': {
+      // the detail inspector on a finished exact copy: measurements and side-by-side stills, no model calls
+      const src = pos[0], refFile = str(flags.reference);
+      if (!src || !refFile) throw new Error('usage: motion inspect <replicate-dir> --reference ref.mp4 [--scenes id,id] [-o dir]');
+      const read = (n: string) => JSON.parse(readFileSync(join(src, n), 'utf8'));
+      const v = validatePlan(read('plan.json'));
+      if (!v.ok) throw new Error(`invalid plan in ${src}:\n${formatIssues(v.errors)}`);
+      const direction = read('direction.json');
+      const windows = sceneWindows(read('breakdown.json'), direction, await videoDuration(refFile), true);
+      const only = (str(flags.scenes) ?? '').split(',').map(x => x.trim()).filter(Boolean);
+      const dir = out ?? join(src, 'inspect');
+      const browser = await launch();
+      try {
+        const reel = await openReel(v.plan, browser);
+        for (const [i, s] of reel.sections.entries()) {
+          const id = direction.scenes[i]?.id ?? `scene-${i + 1}`;
+          if (only.length && !only.includes(id)) continue;
+          const [clip] = await renderClips(reel, [{ from: s.start, to: s.end }], { width: 640, fps: 24 });
+          const dt = await inspectScene({
+            refFile, from: windows[i].from, to: windows[i].to, clip,
+            stillAt: async t => dataUrlToBuffer(await reel.page.evaluate(x => window.__reel!.still!(x, 1), Math.min(s.start + t, s.end - 1e-3))),
+          });
+          mkdirSync(join(dir, id), { recursive: true });
+          writeFileSync(join(dir, id, 'report.txt'), `${dt.report || '(nothing measured)'}\n`);
+          dt.images.forEach((im, k) => writeFileSync(join(dir, id, `${String(k + 1).padStart(2, '0')}.jpg`), im.jpg));
+          log(`\n── ${id}\n${dt.report || '(nothing measured)'}`);
+        }
+        await reel.page.context().close();
+      } finally {
+        await browser.close();
+      }
+      console.log(`✓ ${dir}`);
       return true;
     }
     case 'lessons': {
