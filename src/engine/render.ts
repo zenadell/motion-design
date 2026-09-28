@@ -242,8 +242,8 @@ export function createEngine(plan: Plan): Engine {
         if (cuts.some(c => t < c && ts >= c)) continue;
         const before = w.__motion3d ?? 0;
         drawScene(gSub, ts);
-        // software WebGL is costly: frames that draw real 3D take two blur samples, not six
-        if (k === 0 && (w.__motion3d ?? 0) !== before && sub > 2) { sub = 2; }
+        // software WebGL is costly (0.2–0.8 s a frame): frames that draw real 3D take one sample, no blur
+        if (k === 0 && (w.__motion3d ?? 0) !== before) sub = 1;
         g.globalAlpha = 1 / ++n;
         g.drawImage(SUB, 0, 0);
       }

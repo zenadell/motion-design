@@ -159,7 +159,7 @@ The director names one per scene (`setpiece` in the direction) and builds the fi
 
 ### Real 3D (Three.js)
 
-`S.set.logo3d`, `S.set.type3d` and `S.set.shapes3d` are real 3D set pieces, and `S.three` lets a scene build its own 3D world. The brand mark and any text are extruded into bevelled solids and lit in a virtual photo studio (soft boxes, reflections). Materials: chrome, gold, glass, gloss, matte, metal, neon (with bloom) and clay. Three.js lives in a separate bundle (`dist/three.js`, about 800 KB) that is inlined only into reels whose code uses it. Headless Chromium renders it with SwiftShader (software WebGL 2, no GPU), which is slower: frames that draw 3D take two motion-blur samples instead of six, and the automated speed check allows them 250 ms.
+`S.set.logo3d`, `S.set.type3d` and `S.set.shapes3d` are real 3D set pieces, and `S.three` lets a scene build its own 3D world. The brand mark and any text are extruded into bevelled solids and lit in a virtual photo studio (soft boxes, reflections). Materials: chrome, gold, glass, gloss, matte, metal, neon (with bloom) and clay. Three.js lives in a separate bundle (`dist/three.js`, about 800 KB) that is inlined only into reels whose code uses it. Headless Chromium renders it with SwiftShader (software WebGL 2, no GPU), which is slower (0.2–0.8 s a frame, and parallel workers share the same CPU cores): frames that draw 3D are rendered without motion blur (one sample instead of six), and the automated speed check allows them 250 ms.
 
 ### Setting the bar, client feedback and refining
 
