@@ -3,8 +3,8 @@
   "lessons": [
     {
       "id": "discrete-kinetic-phrase-states",
-      "rule": "Drive kinetic typography from a keyed array of state objects `[{t, text, color, glowRadius}]` and render strictly the state matching the current timestamp; never clump multiple sequential phrases into a single static string or skip directed intermediate word beats.",
-      "why": "In scene-7 (#1 score 3.8, r1 score 5.2), the coder omitted multiple directed intermediate words ('Find it', 'Pin it', 'Get Inspired') and leaped directly from the opening title to 'Pin' and 'Inspired', leaving dead holds between jumps.",
+      "rule": "Drive kinetic typography from a keyed array of state objects `[{t, text, color, glowRadius}]` and render strictly the state matching the current timestamp; never leave outgoing phrase layers visible underneath incoming words or let previous text ghost during transitions.",
+      "why": "In scene-1 (score 4.3), outgoing word 'lacking' lingered visible behind 'Ideas' at t=0.58s, creating overlapping letterforms instead of a clean state swap.",
       "roles": [
         "coder",
         "director"
@@ -12,23 +12,25 @@
       "tags": [
         "kinetic-type",
         "timing",
-        "rhythm"
+        "rhythm",
+        "layout"
       ],
       "mode": "exact",
-      "seen": 2,
-      "shown": 1,
-      "repeated": 1,
+      "seen": 3,
+      "shown": 2,
+      "repeated": 2,
       "created": "2026-09-28T11:51:56.236Z",
-      "updated": "2026-09-28T13:01:05.119Z",
+      "updated": "2026-09-28T13:35:30.787Z",
       "sources": [
         "out/rep-pinterest2",
-        "out/rep-pinterest3"
+        "out/rep-pinterest3",
+        "out/rep-pinterest4"
       ]
     },
     {
       "id": "radial-blast-shockwave-reveal",
-      "rule": "Execute expanding shockwave scene transitions using an expanding circular clipping path (arc scaling from 0% to 250% frame width with easeOutExpo) and additive radial bloom; never abruptly fill the entire canvas with solid background color or display incoming UI elements prior to the wave edge.",
-      "why": "In scene-2 (#1 score 3.9, r1 score 4.8), the coder stalled animation on a static red circle and failed to execute the circular clipping reveal of the underlying search pill and skeleton cards.",
+      "rule": "When animating expanding circular shockwaves, check the reference for terminal bounds: if bounded, constrain the circle radius to the documented diameter (e.g. 600–700px) and preserve the background field; never expand the circle to 250% canvas width or flood the entire canvas with solid color unless explicitly specified.",
+      "why": "In scene-2 (scores 5.1, 5.2), the coder scaled the red shockwave circle across the entire 1920x1080 canvas, turning the clean white background solid red, whereas the reference kept a 672px bounded circle on a white background.",
       "roles": [
         "coder"
       ],
@@ -40,37 +42,88 @@
         "glow"
       ],
       "mode": "exact",
-      "seen": 2,
-      "shown": 1,
-      "repeated": 1,
+      "seen": 3,
+      "shown": 2,
+      "repeated": 2,
       "created": "2026-09-28T11:51:56.236Z",
-      "updated": "2026-09-28T13:01:05.119Z",
+      "updated": "2026-09-28T13:35:30.787Z",
       "sources": [
         "out/rep-pinterest2",
-        "out/rep-pinterest3"
+        "out/rep-pinterest3",
+        "out/rep-pinterest4"
+      ]
+    },
+    {
+      "id": "tight-radial-backlight-bounds",
+      "rule": "Constrain text and UI glows to their target element's aspect ratio and bounding box (e.g. horizontally stretching canvas transforms to hug wordmarks) with tight falloffs (<1% frame area); never substitute wordmark halos with giant circular radial bursts that flood adjacent words or the canvas with ambient haze.",
+      "why": "In scene-7 (#1 score 4.4, r1 score 4.7), the coder rendered a giant circular radial glow (500x394px, 5.2x reference area) centered over 'Pin' rather than a tight, horizontally stretched 188x98px halo behind 'it', and flooded scene-5 and scene-6 with premature ambient hazes.",
+      "roles": [
+        "coder"
+      ],
+      "tags": [
+        "glow",
+        "kinetic-type",
+        "layout",
+        "ui",
+        "light_colour",
+        "typography"
+      ],
+      "mode": "exact",
+      "seen": 3,
+      "shown": 2,
+      "repeated": 2,
+      "created": "2026-09-28T11:51:56.236Z",
+      "updated": "2026-09-28T21:01:29.691Z",
+      "sources": [
+        "out/rep-pinterest2",
+        "out/rep-pinterest4"
       ]
     },
     {
       "id": "ui-cursor-click-depth-elevation",
-      "rule": "Drive interactive hand/pointer cursors along continuous Bezier paths without stationary pauses exceeding 0.2s; on click contact, apply a 2-frame scale squeeze (scale: 0.90) followed by popping the selected card forward (scale: 1.15x–1.35x, drop-shadow blur: 40–60px) while blurring background cards with ctx.filter = 'blur(12px)'.",
-      "why": "In scene-4 (#1 score 4.0, r1 score 3.5), the cursor froze for 0.75s in static poses and failed to trigger the 1.45x hero card elevation and background blur upon clicking the top-left card.",
+      "rule": "In original compositions where card interaction is directed, drive pointer cursors along Bezier paths, squeeze on click (scale: 0.90), and elevate the active card (scale: 1.15x–1.35x) while blurring background cards; in exact-copy mode, strictly follow the reference grid and never pop or blur cards unless documented in the frame log.",
+      "why": "In scene-4 (score 4.3), the coder zoomed the top-left card into the center foreground and blurred background cards, dropping the score because the reference kept all cards flat in the 2-column grid.",
       "roles": [
         "coder"
       ],
       "tags": [
         "ui",
         "motion",
-        "camera"
+        "camera",
+        "layout"
       ],
       "mode": "any",
-      "seen": 2,
-      "shown": 1,
+      "seen": 3,
+      "shown": 2,
       "repeated": 1,
       "created": "2026-09-28T11:51:56.236Z",
-      "updated": "2026-09-28T13:01:05.119Z",
+      "updated": "2026-09-28T13:35:30.787Z",
       "sources": [
         "out/rep-pinterest2",
-        "out/rep-pinterest3"
+        "out/rep-pinterest3",
+        "out/rep-pinterest4"
+      ]
+    },
+    {
+      "id": "shot-boundary-artifact-purge",
+      "rule": "Cleanse all auxiliary UI elements, lingering action buttons, and cursor paths on frame 0 (t = 0.00s) of every new shot unless explicitly logged in the reference; never leave orphan buttons or cursor sprites floating from the preceding scene during transition morphs.",
+      "why": "In Scene 6 (score 4.4 -> 4.9), residual share buttons and cursor graphics lingered on frame 0 during the red pill button expansion, cluttering the opening frame.",
+      "roles": [
+        "coder"
+      ],
+      "tags": [
+        "layout",
+        "polish",
+        "transition"
+      ],
+      "mode": "any",
+      "seen": 1,
+      "shown": 2,
+      "repeated": 1,
+      "created": "2026-09-28T11:51:56.236Z",
+      "updated": "2026-09-28T13:35:30.787Z",
+      "sources": [
+        "out/rep-pinterest2"
       ]
     },
     {
@@ -87,7 +140,7 @@
       ],
       "mode": "any",
       "seen": 1,
-      "shown": 1,
+      "shown": 2,
       "repeated": 1,
       "created": "2026-09-28T11:51:56.236Z",
       "updated": "2026-09-28T13:01:05.119Z",
@@ -96,25 +149,26 @@
       ]
     },
     {
-      "id": "tight-radial-backlight-bounds",
-      "rule": "Constrain text backlights and UI glow halos to a radius of 1.2x–1.5x the text cap-height (150–250px) using high-saturation hex values (`#FF1A35`, `#E60023`) and exponential decay; never flood the canvas with wide 800px diffuse gradients that wash out into pale pink or magenta fields.",
-      "why": "In Scenes 1 and 7, red backlight flares were rendered as expansive, desaturated pink washes across the entire screen instead of punchy, saturated radial blooms concentrated behind the active words.",
+      "id": "ui-masonry-feed-stagger",
+      "rule": "When rendering multi-card social or pinboard feeds, alternate column heights and vertical offsets (e.g., column 1: tall 460px then short 220px; column 2: short 280px then tall 400px) with opaque high-contrast fills (#BFBFBF–#C7C7C7); never arrange feed items into an identical, symmetrical 2x2 grid or washed-out low-contrast boxes.",
+      "why": "In scene-3 (#1 score 4.5, r1 score 4.8) and scene-4 (score 4.0), the coder rendered cards as a rigid, symmetrical 2x2 grid with washed-out faint outlines instead of the authentic staggered masonry layout.",
       "roles": [
-        "coder"
+        "coder",
+        "director"
       ],
       "tags": [
-        "glow",
-        "kinetic-type",
-        "layout"
+        "ui",
+        "layout",
+        "composition"
       ],
-      "mode": "exact",
+      "mode": "any",
       "seen": 1,
       "shown": 1,
       "repeated": 1,
-      "created": "2026-09-28T11:51:56.236Z",
-      "updated": "2026-09-28T13:01:05.119Z",
+      "created": "2026-09-28T13:01:05.119Z",
+      "updated": "2026-09-28T13:35:30.787Z",
       "sources": [
-        "out/rep-pinterest2"
+        "out/rep-pinterest3"
       ]
     },
     {
@@ -210,7 +264,7 @@
       ],
       "mode": "any",
       "seen": 2,
-      "shown": 1,
+      "shown": 2,
       "repeated": 0,
       "created": "2026-09-28T11:49:09.627Z",
       "updated": "2026-09-28T11:50:19.927Z",
@@ -243,6 +297,49 @@
       "sources": [
         "out/invent4-jomiez",
         "out/film20-deepseek"
+      ]
+    },
+    {
+      "id": "exact-spring-damping-fidelity",
+      "rule": "Match the reference's spring physics directly: when the reference exhibits bouncy pop-ins with harmonic overshoot (e.g. 15%–25% overshoot settling over 0.5–0.7s), implement an underdamped spring (`S.spring(t, omega, zeta < 0.8)`); never replace directed bouncy UI pill or typographic hits with stiff linear tweens, zero-overshoot eases, or truncated static holds.",
+      "why": "In scene-6 (#1 score 4.4, r1 score 4.9) and scene-7 (#1 score 4.4, r1 score 4.7), the coder used stiff linear easing or premature settles on pill pop-in and typographic entrances, missing the reference's 19%–25% spring overshoot dynamics.",
+      "roles": [
+        "coder"
+      ],
+      "tags": [
+        "motion",
+        "timing",
+        "ui"
+      ],
+      "mode": "exact",
+      "seen": 2,
+      "shown": 0,
+      "repeated": 0,
+      "created": "2026-09-28T13:35:30.787Z",
+      "updated": "2026-09-28T21:01:29.691Z",
+      "sources": [
+        "out/rep-pinterest4"
+      ]
+    },
+    {
+      "id": "flat-vector-cursor-rendering",
+      "rule": "Render interactive OS cursors as flat 2D vector paths (e.g. white fill with a crisp 1–1.5px black outline, angled at 45°) scaled to standard desktop dimensions (24–32px); never render dark metallic, embossed, or faux-3D vertical emoji hands unless explicitly logged in the reference.",
+      "why": "In scene-4 (#1 score 4.3, r1 score 4.4) and scene-6 (#1 score 4.4, r1 score 4.9), the coder repeatedly drew a dark grey 3D-shaded vertical hand emoji instead of standard 45° flat vector pointer hands with black outlines.",
+      "roles": [
+        "coder"
+      ],
+      "tags": [
+        "ui",
+        "layout"
+      ],
+      "mode": "exact",
+      "seen": 2,
+      "shown": 0,
+      "repeated": 0,
+      "created": "2026-09-28T13:35:30.787Z",
+      "updated": "2026-09-28T21:01:29.691Z",
+      "sources": [
+        "out/rep-pinterest4"
       ]
     },
     {
@@ -342,6 +439,31 @@
       ]
     },
     {
+      "id": "ui-pill-specular-sheen-sweep",
+      "rule": "When holding on an active UI pill button or confirmation badge, animate a diagonal specular highlight sheen (a 30°–45° white-to-transparent linear gradient translating across the clipped badge from -100% to +200% width over 0.6–0.9s with easeInOutCubic); never leave confirmation badges completely static during hold frames or substitute with a flat static gradient.",
+      "why": "In scene-6 (#1 score 4.4, r1 score 4.9), the coder rendered a flat static gradient across the 'Pined' confirmation badge instead of animating the directed diagonal white specular light sweep across its face.",
+      "roles": [
+        "coder"
+      ],
+      "tags": [
+        "ui",
+        "polish",
+        "lighting",
+        "motion",
+        "glow"
+      ],
+      "mode": "any",
+      "seen": 2,
+      "shown": 1,
+      "repeated": 0,
+      "created": "2026-09-28T13:01:05.119Z",
+      "updated": "2026-09-28T21:01:29.691Z",
+      "sources": [
+        "out/rep-pinterest3",
+        "out/rep-pinterest4"
+      ]
+    },
+    {
       "id": "camera-crash-zoom-terminal-state",
       "rule": "When executing a crash-zoom into 3D text geometry for a scene transition, push the camera completely through the glyph's aperture into full-bleed color/black or snap a 90-degree axial cut at peak velocity; never decelerate and stall the camera inside a single clipped, unreadable letter facet.",
       "why": "In hook-slam-prism (4.1 & 4.6) and cylinder-vortex (2.8), the camera pushed linearly into letters ('W' and 'SOFTWARE') and froze on unreadable cropped white polygons and empty horizon gaps.",
@@ -356,7 +478,7 @@
       ],
       "mode": "any",
       "seen": 1,
-      "shown": 1,
+      "shown": 2,
       "repeated": 0,
       "created": "2026-09-28T11:49:09.627Z",
       "updated": "2026-09-28T11:49:09.627Z",
@@ -378,7 +500,7 @@
       ],
       "mode": "any",
       "seen": 1,
-      "shown": 1,
+      "shown": 2,
       "repeated": 0,
       "created": "2026-09-28T11:49:09.627Z",
       "updated": "2026-09-28T11:49:09.627Z",
@@ -422,7 +544,7 @@
       ],
       "mode": "any",
       "seen": 1,
-      "shown": 1,
+      "shown": 2,
       "repeated": 0,
       "created": "2026-09-28T11:48:20.235Z",
       "updated": "2026-09-28T11:48:20.235Z",
@@ -469,7 +591,7 @@
       ],
       "mode": "any",
       "seen": 1,
-      "shown": 0,
+      "shown": 1,
       "repeated": 0,
       "created": "2026-09-28T13:01:05.119Z",
       "updated": "2026-09-28T13:01:05.119Z",
@@ -545,6 +667,27 @@
       ]
     },
     {
+      "id": "no-truncated-copy-in-ui",
+      "rule": "Never truncate directed UI strings, omit secondary metrics, or substitute directed text with placeholder dots; measure text bounds using `ctx.measureText` and fit the complete verbatim copy, author lines, and stats specified in the frame log.",
+      "why": "In scene-3, search text was truncated to 'Searc'; in scene-4, 'It's Very Simple.' was truncated to 'It's Very Simp' and the Philip Glass credit was replaced with dots, while metric cards were stripped of numbers.",
+      "roles": [
+        "coder"
+      ],
+      "tags": [
+        "ui",
+        "typography"
+      ],
+      "mode": "exact",
+      "seen": 1,
+      "shown": 0,
+      "repeated": 0,
+      "created": "2026-09-28T13:35:30.787Z",
+      "updated": "2026-09-28T13:35:30.787Z",
+      "sources": [
+        "out/rep-pinterest4"
+      ]
+    },
+    {
       "id": "offscreen-canvas-trail-purge",
       "rule": "When rendering moving UI cursors, particles, or overlays via offscreen canvas or layered draw routines, explicitly clear the buffer on every frame with ctx.clearRect(0, 0, width, height) before redrawing; never allow previous frame transforms or sprite blits to accumulate into ghost trails.",
       "why": "In scene-4 r1, a cursor buffer clearing failure caused a cascading ghost trail of duplicate metallic hands frozen along the right side of the canvas, driving the polish score down to 2 and overall score from 4.0 to 3.5.",
@@ -558,7 +701,7 @@
       ],
       "mode": "any",
       "seen": 1,
-      "shown": 0,
+      "shown": 1,
       "repeated": 0,
       "created": "2026-09-28T13:01:05.119Z",
       "updated": "2026-09-28T13:01:05.119Z",
@@ -580,12 +723,78 @@
       ],
       "mode": "any",
       "seen": 1,
-      "shown": 1,
+      "shown": 2,
       "repeated": 0,
       "created": "2026-09-28T11:50:19.927Z",
       "updated": "2026-09-28T11:50:19.927Z",
       "sources": [
         "out/film20-luna"
+      ]
+    },
+    {
+      "id": "per-word-typographic-styling",
+      "rule": "When reference kinetic typography features mixed color styling or localized glows within a single phrase (e.g. 'Pin' in solid black, 'it' in dark red with a glowing halo), measure and render each word independently using `ctx.measureText` offsets; never render the phrase with a single uniform fillStyle and blanket centered glow.",
+      "why": "In scene-7 (#1 score 4.4, r1 score 4.7), the coder rendered 'Pin it' entirely in bright red with a center glow, missing the reference's split color styling ('Pin' in black, 'it' in dark red) and localized glow placement.",
+      "roles": [
+        "coder"
+      ],
+      "tags": [
+        "kinetic-type",
+        "typography",
+        "glow"
+      ],
+      "mode": "exact",
+      "seen": 1,
+      "shown": 0,
+      "repeated": 0,
+      "created": "2026-09-28T21:01:29.691Z",
+      "updated": "2026-09-28T21:01:29.691Z",
+      "sources": [
+        "out/rep-pinterest4"
+      ]
+    },
+    {
+      "id": "post-interaction-terminal-state",
+      "rule": "When a UI interaction (such as clicking a pin, save, or action button) is triggered mid-scene, continue the animation lifecycle through the directed post-click response (e.g. card collapse, shrink into a thumbnail, or modal dismissal) across the remaining scene duration; never freeze on a static clicked state and stall motion for the remainder of the shot.",
+      "why": "In scene-5 (#1 score 5.3, r1 score 5.4), after the cursor clicked the red pin button at t=0.65s, the coder froze the entire card and button layout static for the remaining 1.5 seconds instead of collapsing the hero card into a compact thumbnail at t=1.33s.",
+      "roles": [
+        "coder"
+      ],
+      "tags": [
+        "ui",
+        "motion",
+        "timing"
+      ],
+      "mode": "exact",
+      "seen": 1,
+      "shown": 0,
+      "repeated": 0,
+      "created": "2026-09-28T21:01:29.691Z",
+      "updated": "2026-09-28T21:01:29.691Z",
+      "sources": [
+        "out/rep-pinterest4"
+      ]
+    },
+    {
+      "id": "premature-element-suppression",
+      "rule": "When an element or transition phase is directed to appear at an explicit timestamp `t_start` (e.g. t >= 0.25s), guard its drawing logic strictly (`if (t < t_start) return;`); never render faint lines, partial bounding boxes, or background glow halos in the center of the frame before the element's activation beat.",
+      "why": "In scene-6 (#1 score 4.4, r1 score 4.9), the coder rendered a thin red line with a 2.0% pale pink haze in the center of the screen at t=0.08s while the reference center was completely blank until the morph at t=0.25s.",
+      "roles": [
+        "coder"
+      ],
+      "tags": [
+        "timing",
+        "ui",
+        "glow"
+      ],
+      "mode": "any",
+      "seen": 1,
+      "shown": 0,
+      "repeated": 0,
+      "created": "2026-09-28T21:01:29.691Z",
+      "updated": "2026-09-28T21:01:29.691Z",
+      "sources": [
+        "out/rep-pinterest4"
       ]
     },
     {
@@ -623,12 +832,32 @@
       ],
       "mode": "any",
       "seen": 1,
-      "shown": 1,
+      "shown": 2,
       "repeated": 0,
       "created": "2026-09-28T11:47:34.477Z",
       "updated": "2026-09-28T11:47:34.477Z",
       "sources": [
         "out/invent2-jomiez"
+      ]
+    },
+    {
+      "id": "scope-safe-scene-helpers",
+      "rule": "Isolate drawing phase variables and helper instantiations inside explicit block scopes `{ ... }` or use unique identifier names; never declare duplicate `const` or `let` identifiers (such as `spr`, `pill`, `w`, `h`) within the same scene function.",
+      "why": "Scene-5 crashed engine tests before rendering a single frame because `Identifier 'spr' has already been declared`, while scene-6 threw `Unexpected identifier 'pill'`.",
+      "roles": [
+        "coder"
+      ],
+      "tags": [
+        "code-error"
+      ],
+      "mode": "any",
+      "seen": 1,
+      "shown": 0,
+      "repeated": 0,
+      "created": "2026-09-28T13:35:30.787Z",
+      "updated": "2026-09-28T13:35:30.787Z",
+      "sources": [
+        "out/rep-pinterest4"
       ]
     },
     {
@@ -645,34 +874,12 @@
       ],
       "mode": "any",
       "seen": 1,
-      "shown": 1,
+      "shown": 2,
       "repeated": 0,
       "created": "2026-09-28T11:48:20.235Z",
       "updated": "2026-09-28T11:48:20.235Z",
       "sources": [
         "out/invent4-jomiez"
-      ]
-    },
-    {
-      "id": "shot-boundary-artifact-purge",
-      "rule": "Cleanse all auxiliary UI elements, lingering action buttons, and cursor paths on frame 0 (t = 0.00s) of every new shot unless explicitly logged in the reference; never leave orphan buttons or cursor sprites floating from the preceding scene during transition morphs.",
-      "why": "In Scene 6 (score 4.4 -> 4.9), residual share buttons and cursor graphics lingered on frame 0 during the red pill button expansion, cluttering the opening frame.",
-      "roles": [
-        "coder"
-      ],
-      "tags": [
-        "layout",
-        "polish",
-        "transition"
-      ],
-      "mode": "any",
-      "seen": 1,
-      "shown": 1,
-      "repeated": 0,
-      "created": "2026-09-28T11:51:56.236Z",
-      "updated": "2026-09-28T11:51:56.236Z",
-      "sources": [
-        "out/rep-pinterest2"
       ]
     },
     {
@@ -689,12 +896,34 @@
       ],
       "mode": "any",
       "seen": 1,
-      "shown": 1,
+      "shown": 2,
       "repeated": 0,
       "created": "2026-09-28T11:51:56.236Z",
       "updated": "2026-09-28T11:51:56.236Z",
       "sources": [
         "out/rep-pinterest2"
+      ]
+    },
+    {
+      "id": "staggered-grid-entrance-timing",
+      "rule": "In exact-copy multi-card feeds and search results, gate card entrances strictly by their logged reference timestamps (e.g. top row visible at t=0.20s, bottom row sliding in at t=0.80s) and keep cursor hover drifting actively; never pop all grid rows simultaneously on frame 0, freeze cursor drift into dead zones, or trigger card zoom modals ahead of schedule.",
+      "why": "In scene-4 (#1 score 4.3, r1 score 4.4), the coder spawned all 4 cards at full size at t=0.33s instead of staggering the bottom cards at t=0.83s, froze motion during a 2-second idle dead zone, and triggered the zoom modal too early.",
+      "roles": [
+        "coder"
+      ],
+      "tags": [
+        "ui",
+        "timing",
+        "layout"
+      ],
+      "mode": "exact",
+      "seen": 1,
+      "shown": 0,
+      "repeated": 0,
+      "created": "2026-09-28T21:01:29.691Z",
+      "updated": "2026-09-28T21:01:29.691Z",
+      "sources": [
+        "out/rep-pinterest4"
       ]
     },
     {
@@ -710,7 +939,7 @@
       ],
       "mode": "any",
       "seen": 1,
-      "shown": 1,
+      "shown": 2,
       "repeated": 0,
       "created": "2026-09-28T11:51:14.484Z",
       "updated": "2026-09-28T11:51:14.484Z",
@@ -733,7 +962,7 @@
       ],
       "mode": "any",
       "seen": 1,
-      "shown": 1,
+      "shown": 2,
       "repeated": 0,
       "created": "2026-09-28T11:50:19.927Z",
       "updated": "2026-09-28T11:50:19.927Z",
@@ -779,53 +1008,7 @@
       ],
       "mode": "any",
       "seen": 1,
-      "shown": 0,
-      "repeated": 0,
-      "created": "2026-09-28T13:01:05.119Z",
-      "updated": "2026-09-28T13:01:05.119Z",
-      "sources": [
-        "out/rep-pinterest3"
-      ]
-    },
-    {
-      "id": "ui-masonry-feed-stagger",
-      "rule": "When rendering multi-card social or pinboard feeds, alternate column heights and vertical offsets (e.g., column 1: tall 460px then short 220px; column 2: short 280px then tall 400px) with opaque high-contrast fills (#BFBFBF–#C7C7C7); never arrange feed items into an identical, symmetrical 2x2 grid or washed-out low-contrast boxes.",
-      "why": "In scene-3 (#1 score 4.5, r1 score 4.8) and scene-4 (score 4.0), the coder rendered cards as a rigid, symmetrical 2x2 grid with washed-out faint outlines instead of the authentic staggered masonry layout.",
-      "roles": [
-        "coder",
-        "director"
-      ],
-      "tags": [
-        "ui",
-        "layout",
-        "composition"
-      ],
-      "mode": "any",
-      "seen": 1,
-      "shown": 0,
-      "repeated": 0,
-      "created": "2026-09-28T13:01:05.119Z",
-      "updated": "2026-09-28T13:01:05.119Z",
-      "sources": [
-        "out/rep-pinterest3"
-      ]
-    },
-    {
-      "id": "ui-pill-specular-sheen-sweep",
-      "rule": "When holding on an active UI pill button or confirmation badge, animate a diagonal specular highlight sheen (a 30°–45° white-to-transparent linear gradient translating across the clipped badge from -100% to +200% width over 0.6–0.9s with easeInOutCubic); never leave confirmation badges completely static during hold frames.",
-      "why": "In scene-6 (#1 score 4.4, r1 score 4.9), the confirmation pill badge sat frozen on the white background without specular reflection, causing the scene to stall visually.",
-      "roles": [
-        "coder"
-      ],
-      "tags": [
-        "ui",
-        "polish",
-        "lighting",
-        "motion"
-      ],
-      "mode": "any",
-      "seen": 1,
-      "shown": 0,
+      "shown": 1,
       "repeated": 0,
       "created": "2026-09-28T13:01:05.119Z",
       "updated": "2026-09-28T13:01:05.119Z",

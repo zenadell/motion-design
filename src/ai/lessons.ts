@@ -265,8 +265,18 @@ Write the lessons.`;
 export async function learn(llm: LLM, store: Lessons, ev: RunEvidence, source: string) {
   store.reload();
   const shown = [...store.shownNow];
-  const r = await llm.json({ label: 'learn', effort: 'high', schema: reflectSchema(), system: reflectSystem(), turns: [user(reflectUser(ev, store.lessons, shown))] });
-  const out = parseJson<{ lessons?: Partial<Lesson>[]; repeated?: string[] }>(r.text);
+  const req = { label: 'learn', effort: 'high' as const, schema: reflectSchema(), system: reflectSystem(), turns: [user(reflectUser(ev, store.lessons, shown))] };
+  let r = await llm.json(req);
+  let out: { lessons?: Partial<Lesson>[]; repeated?: string[] } | undefined;
+  // a reply cut off mid-stream is asked for again
+  for (let attempt = 0; !out; attempt++) {
+    try {
+      out = parseJson(r.text);
+    } catch (e) {
+      if (attempt >= 2) throw e;
+      r = await llm.json(req);
+    }
+  }
   const res = store.merge(Array.isArray(out.lessons) ? out.lessons : [], Array.isArray(out.repeated) ? out.repeated : [], source);
   store.save();
   return { ...res, usage: r.usage as Usage, reply: r.text };
