@@ -298,11 +298,16 @@ export async function invent(llm: LLM, o: InventOptions) {
     }
 
     // ── per-scene: write → test/fix → watch → score, best of N, then rewrite rounds ──
+    const lastProblems: Record<string, string[]> = {};
     const testFix = async (i: number, c: SceneCode, tag: string): Promise<SceneCode | null> => {
       for (let r = 0; r <= fixRounds; r++) {
         const res = await run(scenePlan(i, c), [c.draw]);
         if (!res.problems.length) return c;
-        if (r === fixRounds) { log(`    ${d.scenes[i].id} ${tag}: still ${res.problems.length} problem(s), discarded`); return null; }
+        if (r === fixRounds) {
+          lastProblems[d.scenes[i].id] = res.problems;
+          log(`    ${d.scenes[i].id} ${tag}: still ${res.problems.length} problem(s), discarded: ${res.problems.slice(0, 2).join(' | ').slice(0, 240)}`);
+          return null;
+        }
         const fixed = await ask<SceneCode>(codeLLM, `fix scene ${d.scenes[i].id} ${tag} · ${r + 1}`, coder(), [
           `SCENE "${d.scenes[i].id}": ${d.scenes[i].idea}\nOn-screen text: ${JSON.stringify(d.scenes[i].onscreenText)}\nLength: ${d.scenes[i].beats} beats at ${bpm} BPM.\n\nSHARED LIB (S.lib)\n\`\`\`js\n${lib}\n\`\`\``,
           fixUser(`scene "${d.scenes[i].id}"`, { draw: c.draw, sfx: c.sfx, hits: JSON.stringify(c.hits) }, res.problems),
@@ -389,8 +394,18 @@ export async function invent(llm: LLM, o: InventOptions) {
         history[s.id].push({ step: `candidate ${k + 1}`, score: cr.s });
         return { code: ok, score: cr.s, critique: cr.c, clip: cr.clip };
       }));
-      const good = cands.filter((x): x is NonNullable<typeof x> => !!x).sort((a, b) => b.score - a.score);
-      if (!good.length) throw new Error(`no working version of scene "${s.id}"`);
+      let good = cands.filter((x): x is NonNullable<typeof x> => !!x).sort((a, b) => b.score - a.score);
+      // every candidate failed its tests: write fresh ones (a different, simpler approach) before giving up on the film
+      for (let k = 1; k <= 2 && !good.length; k++) {
+        log(`  ${s.id}: no working version yet → fresh attempt ${k}`);
+        const r = await ask<SceneCode>(codeLLM, `code ${s.id} retry ${k}`, coder(), [sceneUser(d, lib, i, bpm) + refNote + `\n\n(Earlier versions of this scene kept failing the engine's tests: ${(lastProblems[s.id] ?? []).slice(0, 4).join(' | ') || 'errors'}. Write it again from scratch, robustly: guard every value that can go negative or undefined, clamp times, keep it within the frame budget.)`], sceneSchema(), 'high');
+        const ok = await testFix(i, cleanScene(r), `retry${k}`);
+        if (!ok) continue;
+        const cr = await critique(i, await clipOf(i, scenePlan(i, ok)), `retry${k}`);
+        history[s.id].push({ step: `retry ${k}`, score: cr.s });
+        good = [{ code: ok, score: cr.s, critique: cr.c, clip: cr.clip }];
+      }
+      if (!good.length) throw new Error(`no working version of scene "${s.id}": ${(lastProblems[s.id] ?? []).slice(0, 3).join(' | ')}`);
       let cur = good[0];
       // the rubric score only orders the field; the head-to-head decides between the top two
       if (good.length > 1 && (await better(i, cur, good[1], 'cands'))) cur = good[1];
