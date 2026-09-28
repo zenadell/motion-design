@@ -1,4 +1,5 @@
-import { LLMError, type JsonReply, type JsonRequest, type LLM, type Part } from './llm';
+import { videoFrames } from './frames';
+import { LLMError, type JsonReply, type JsonRequest, type LLM, type Part, type Turn } from './llm';
 
 // OpenRouter: one key, hundreds of models (Qwen, GLM, DeepSeek, GPT, Kimi,
 // MiniMax, Gemini …) behind an OpenAI-compatible API. Model ids have a
@@ -26,6 +27,43 @@ export interface OpenRouterOptions {
 }
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+
+// What each model accepts as input, from OpenRouter's public catalogue (fetched once).
+let catalogue: Promise<Map<string, Set<string>>> | undefined;
+export function inputModalities(model: string, doFetch: typeof fetch = fetch): Promise<Set<string> | undefined> {
+  catalogue ??= doFetch('https://openrouter.ai/api/v1/models')
+    .then(r => r.json() as Promise<{ data: { id: string; architecture?: { input_modalities?: string[] } }[] }>)
+    .then(j => new Map(j.data.map(m => [m.id, new Set(m.architecture?.input_modalities ?? ['text'])])))
+    .catch(() => new Map());
+  return catalogue.then(c => c.get(model));
+}
+
+const frameCache = new Map<string, Promise<{ frames: Buffer[]; seconds: number }>>();
+/**
+ * Fit the parts to what the model can read: a video becomes evenly spaced
+ * still frames for image-only models, and a short note for text-only ones.
+ */
+export async function adaptTurns(turns: Turn[], accepts: Set<string> | undefined): Promise<Turn[]> {
+  if (!accepts || accepts.has('video')) return turns;
+  const out: Turn[] = [];
+  for (const t of turns) {
+    const parts: Part[] = [];
+    for (const p of t.parts) {
+      if ('video' in p) {
+        if (!accepts.has('image')) { parts.push({ text: '(a video clip was attached here; this model cannot view it)' }); continue; }
+        const key = `${p.video.data.length}:${p.video.data.slice(0, 64)}:${p.video.data.slice(-64)}`;
+        let f = frameCache.get(key);
+        if (!f) frameCache.set(key, (f = videoFrames(Buffer.from(p.video.data, 'base64'), 8)));
+        const { frames, seconds } = await f;
+        parts.push({ text: `(video shown as ${frames.length} still frames, evenly spaced over ${seconds.toFixed(1)} s)` });
+        for (const fr of frames) parts.push({ image: { mime: 'image/jpeg', data: fr.toString('base64') } });
+      } else if ('image' in p && !accepts.has('image')) parts.push({ text: '(an image was attached here; this model cannot view it)' });
+      else parts.push(p);
+    }
+    out.push({ ...t, parts });
+  }
+  return out;
+}
 
 type Content = { type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } } | { type: 'video_url'; video_url: { url: string } };
 
@@ -83,6 +121,7 @@ export class OpenRouter implements LLM {
 
   async json(req: JsonRequest): Promise<JsonReply> {
     let schema = req.schema;
+    req = { ...req, turns: await adaptTurns(req.turns, await inputModalities(this.model, this.doFetch === fetch ? fetch : async () => new Response('{"data":[]}'))) };
     for (let attempt = 0; ; attempt++) {
       const t0 = Date.now();
       let status: number | undefined;

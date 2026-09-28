@@ -286,7 +286,18 @@ export function installCustom(custom: Custom, ctx0: Ctx): Installed {
       energy: 2,
       hud: false,
       example: {},
-      draw: (g, lt, _p, c) => draw(g, lt, stageOf(c, s), seededMath(c.index * 7919 + lt)),
+      draw: (g, lt, _p, c) => {
+        try {
+          draw(g, lt, stageOf(c, s), seededMath(c.index * 7919 + lt));
+        } catch (e) {
+          // During a transition a scene is drawn slightly before 0 or after its end; code that
+          // breaks there (a negative radius…) draws its nearest valid frame instead.
+          if (lt >= 0 && lt <= c.dur) throw e;
+          const tc = Math.min(c.dur, Math.max(0, lt));
+          resetCtx(g);
+          draw(g, tc, stageOf(c, s), seededMath(c.index * 7919 + tc));
+        }
+      },
       sfx: sfx ? (A, t0, _p, c) => sfx(audioApi(A), t0, stageOf(c, s), seededMath(c.index * 104729)) : undefined,
       hits: (_p, c) => s.hits.map(h => ({ at: h.beat * c.B, shake: h.shake, punch: h.punch })),
       bed: custom.score ? () => [0, 0] : undefined,
