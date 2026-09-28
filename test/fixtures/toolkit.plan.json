@@ -1,0 +1,17 @@
+{
+  "meta": { "title": "Toolkit test", "hud": false, "captions": false, "grain": 0.03 },
+  "brand": { "name": "Northwind", "suffix": "Studio", "site": "northwind.studio", "colors": { "bg": "#0A0C14", "text": "#EEF1F8", "primary": "#3D5AFE" } },
+  "music": { "bpm": 120 },
+  "custom": {
+    "scenes": [
+      { "id": "type", "draw": "g.fillStyle = S.colors.bg; g.fillRect(0,0,S.W,S.H); S.glow(g, S.W/2, S.H/2, 700, S.colors.primary, 0.35); S.type(g, 'DESIGN THAT MOVES', S.W/2, 560, { t, size: 150, align: 'center', stagger: 0.03, from: { y: 1, blur: 12 }, exit: { at: S.b(3), to: { y: -1 } } }); const x = S.kf(t, [[0, 200], [S.b(1), 1720, 'outExpo']]); g.strokeStyle = S.colors.primary; g.lineWidth = 4; g.beginPath(); g.moveTo(200, 640); g.lineTo(x, 640); g.stroke();" },
+      { "id": "cube", "draw": "g.fillStyle = '#05060A'; g.fillRect(0,0,S.W,S.H); const cam = S.cam({ orbit: { yaw: 30 + t * 40, pitch: 18, dist: 1800 }, fov: 35 }); g.strokeStyle = S.colors.primary; g.lineWidth = 3; const v = [-300, 300]; for (const a of v) for (const b of v) { cam.line(g, [[a, b, -300], [a, b, 300]]); cam.line(g, [[a, -300, b], [a, 300, b]]); cam.line(g, [[-300, a, b], [300, a, b]]); } g.save(); if (cam.card(g, [-280, 120, -300], [1, 0, 0], [0, -1, 0])) { S.font(g, 90, 800); g.fillStyle = S.colors.text; g.fillText('CARD', 20, 100); } g.restore(); const s = S.spring(t, 200, 10); S.logo(g, 1650, 900, 120 * s, S.colors.text);" },
+      { "id": "shapes", "draw": "const L = S.layer('fx'); S.fx('glitch-word', L.g, t, { word: 'SIGNAL' }, 4); g.drawImage(L.canvas, 0, 0); g.save(); g.globalCompositeOperation = 'lighter'; const a = S.iconPoints('rocket', 400), b = S.logoPoints(400); const m = S.morph(a, b, S.ease.inOutCubic(S.prog(t, 0.2, 1.6))); g.fillStyle = S.colors.text; for (const [x, y] of m) { g.fillRect(1500 + x * 420, 300 + y * 420, 3, 3); } g.restore(); g.strokeStyle = '#fff'; g.lineWidth = 3; S.drawOn(g, S.iconPolys('globe')[0].map(([x, y]) => [300 + x * 300, 820 + y * 300]), S.prog(t, 0, 1.5), true);" }
+    ]
+  },
+  "sections": [
+    { "technique": "scene:type", "beats": 4 },
+    { "technique": "scene:cube", "beats": 4 },
+    { "technique": "scene:shapes", "beats": 4 }
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "name": "motion-design",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Beat-synced motion design videos from a JSON plan: engine, technique library and renderer.",
+  "type": "module",
+  "bin": {
+    "motion": "dist/cli.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "check": "npm run typecheck && npm test && npm run build",
+    "gen:land": "node scripts/gen-land.mjs",
+    "gen:docs": "node dist/cli.js catalog --md > docs/techniques.md",
+    "smoke": "node dist/cli.js gallery -o out/gallery --quick",
+    "motion": "node dist/cli.js"
+  },
+  "dependencies": {
+    "@fontsource-variable/bricolage-grotesque": "^5.3.0",
+    "@fontsource-variable/dm-sans": "^5.3.0",
+    "@fontsource-variable/fraunces": "^5.3.0",
+    "@fontsource-variable/inter-tight": "^5.3.0",
+    "@fontsource-variable/jetbrains-mono": "^5.3.0",
+    "@fontsource-variable/manrope": "^5.3.0",
+    "@fontsource-variable/plus-jakarta-sans": "^5.3.0",
+    "@fontsource-variable/sora": "^5.3.0",
+    "@fontsource-variable/space-grotesk": "^5.3.0",
+    "@fontsource-variable/unbounded": "^5.3.0",
+    "@fontsource/instrument-serif": "^5.3.0",
+    "@google/genai": "^2.24.0",
+    "ffmpeg-static": "^5.3.0",
+    "playwright": "1.56.1",
+    "three": "^0.186.1",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/three": "^0.186.0",
+    "esbuild": "^0.28.2",
+    "topojson-client": "^3.1.0",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.2",
+    "world-atlas": "^2.0.2"
+  }
+}

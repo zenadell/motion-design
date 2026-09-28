@@ -1,0 +1,432 @@
+{
+ "brand": [
+  {
+   "name": "Kora",
+   "suffix": "Labs",
+   "tagline": "AI products for ambitious teams.",
+   "site": "kora.test",
+   "email": "hello@kora.test",
+   "colors": {
+    "bg": "#0E0F13",
+    "text": "#F2F0EC",
+    "primary": "#6C5CE7",
+    "secondary": "#9B8CFF"
+   },
+   "fonts": {
+    "display": "Inter Tight"
+   },
+   "facts": {
+    "headline": "AI products for ambitious teams.",
+    "description": "Kora Labs designs and builds AI products, web platforms and agents, from first prototype to production.",
+    "services": [
+     "Product strategy",
+     "Web platforms",
+     "AI agents"
+    ],
+    "work": [
+     "Atlas",
+     "Beacon",
+     "Monsoon"
+    ],
+    "stats": [
+     {
+      "value": "40+",
+      "label": "launches"
+     },
+     {
+      "value": "12",
+      "label": "countries served"
+     }
+    ],
+    "locations": [
+     "Lagos",
+     "London"
+    ],
+    "audience": "ambitious teams",
+    "tone": "confident, precise, modern",
+    "keywords": [
+     "AI",
+     "products",
+     "platforms",
+     "agents"
+    ]
+   },
+   "logo": {
+    "candidate": 0,
+    "kind": "icon",
+    "markColor": ""
+   }
+  }
+ ],
+ "plan": [
+  {
+   "concept": "A type-led hook states what Kora builds, particles turn the three services into icons, real work and a real number build tension, and the mark lands on the lockup.",
+   "title": "Showreel",
+   "music": {
+    "bpm": 120,
+    "genre": "electro",
+    "progression": [
+     "Am",
+     "F",
+     "C",
+     "G"
+    ]
+   },
+   "sections": [
+    {
+     "technique": "blade-open",
+     "beats": 0.5
+    },
+    {
+     "technique": "word-cuts",
+     "beats": 1.5,
+     "params": {
+      "words": [
+       "WE",
+       "BUILD",
+       "AI"
+      ],
+      "styles": [
+       "split",
+       "diagonal",
+       "weight"
+      ]
+     }
+    },
+    {
+     "technique": "glitch-word",
+     "beats": 2,
+     "params": {
+      "word": "PRODUCTS",
+      "tag": "<Kora />"
+     },
+     "transition": "blade"
+    },
+    {
+     "technique": "swiss-stack",
+     "beats": 2,
+     "params": {
+      "lines": [
+       "FROM",
+       "PROTOTYPE",
+       "TO LIVE"
+      ]
+     }
+    },
+    {
+     "technique": "particle-morph",
+     "beats": 6,
+     "params": {
+      "kicker": "WHAT WE DO",
+      "items": [
+       {
+        "label": "STRATEGY",
+        "desc": "Product strategy",
+        "icon": "chart"
+       },
+       {
+        "label": "WEB",
+        "desc": "Web platforms",
+        "icon": "web"
+       },
+       {
+        "label": "AGENTS",
+        "desc": "AI agents",
+        "icon": "ai"
+       }
+      ]
+     }
+    },
+    {
+     "technique": "montage",
+     "beats": 2,
+     "params": {
+      "items": [
+       {
+        "title": "ATLAS"
+       },
+       {
+        "title": "BEACON"
+       },
+       {
+        "title": "MONSOON"
+       }
+      ]
+     }
+    },
+    {
+     "technique": "stat-odometer",
+     "beats": 2,
+     "params": {
+      "value": "40+",
+      "label": "launches in 15 countries"
+     },
+     "energy": 3
+    },
+    {
+     "technique": "logo-build",
+     "beats": 4
+    },
+    {
+     "technique": "end-card",
+     "beats": 10
+    }
+   ]
+  },
+  {
+   "concept": "A type-led hook states what Kora builds, particles turn the three services into icons, real work and a real number build tension, and the mark lands on the lockup.",
+   "title": "Showreel",
+   "music": {
+    "bpm": 120,
+    "genre": "electro",
+    "progression": [
+     "Am",
+     "F",
+     "C",
+     "G"
+    ]
+   },
+   "sections": [
+    {
+     "technique": "blade-open",
+     "beats": 0.5
+    },
+    {
+     "technique": "word-cuts",
+     "beats": 1.5,
+     "params": {
+      "words": [
+       "WE",
+       "BUILD",
+       "AI"
+      ],
+      "styles": [
+       "split",
+       "diagonal",
+       "weight"
+      ]
+     }
+    },
+    {
+     "technique": "glitch-word",
+     "beats": 2,
+     "params": {
+      "word": "PRODUCTS",
+      "tag": "<Kora />"
+     },
+     "transition": "blade"
+    },
+    {
+     "technique": "swiss-stack",
+     "beats": 2,
+     "params": {
+      "lines": [
+       "FROM",
+       "PROTOTYPE",
+       "TO LIVE"
+      ]
+     }
+    },
+    {
+     "technique": "particle-morph",
+     "beats": 6,
+     "params": {
+      "kicker": "WHAT WE DO",
+      "items": [
+       {
+        "label": "STRATEGY",
+        "desc": "Product strategy",
+        "icon": "chart"
+       },
+       {
+        "label": "WEB",
+        "desc": "Web platforms",
+        "icon": "web"
+       },
+       {
+        "label": "AGENTS",
+        "desc": "AI agents",
+        "icon": "ai"
+       }
+      ]
+     }
+    },
+    {
+     "technique": "montage",
+     "beats": 2,
+     "params": {
+      "items": [
+       {
+        "title": "ATLAS"
+       },
+       {
+        "title": "BEACON"
+       },
+       {
+        "title": "MONSOON"
+       }
+      ]
+     }
+    },
+    {
+     "technique": "stat-odometer",
+     "beats": 2,
+     "params": {
+      "value": "40+",
+      "label": "launches"
+     },
+     "energy": 3
+    },
+    {
+     "technique": "logo-build",
+     "beats": 4
+    },
+    {
+     "technique": "end-card",
+     "beats": 12
+    }
+   ]
+  }
+ ],
+ "review": [
+  {
+   "score": 7,
+   "summary": "Strong hook and a clean payoff; one word is too wide for the glitch treatment.",
+   "issues": [
+    {
+     "section": 2,
+     "severity": "medium",
+     "problem": "PRODUCTS almost touches the frame edge during the RGB split.",
+     "fix": "Use a shorter word, e.g. glitch-word.word = \"PRODUCT\"."
+    },
+    {
+     "section": 5,
+     "severity": "low",
+     "problem": "Montage items have no tags.",
+     "fix": "Optional: add a tag per project."
+    }
+   ]
+  },
+  {
+   "score": 9,
+   "summary": "Ready to ship.",
+   "issues": []
+  }
+ ],
+ "revise": [
+  {
+   "concept": "A type-led hook states what Kora builds, particles turn the three services into icons, real work and a real number build tension, and the mark lands on the lockup.",
+   "title": "Showreel",
+   "music": {
+    "bpm": 120,
+    "genre": "electro",
+    "progression": [
+     "Am",
+     "F",
+     "C",
+     "G"
+    ]
+   },
+   "sections": [
+    {
+     "technique": "blade-open",
+     "beats": 0.5
+    },
+    {
+     "technique": "word-cuts",
+     "beats": 1.5,
+     "params": {
+      "words": [
+       "WE",
+       "BUILD",
+       "AI"
+      ],
+      "styles": [
+       "split",
+       "diagonal",
+       "weight"
+      ]
+     }
+    },
+    {
+     "technique": "glitch-word",
+     "beats": 2,
+     "params": {
+      "word": "PRODUCT",
+      "tag": "<Kora />"
+     },
+     "transition": "blade"
+    },
+    {
+     "technique": "swiss-stack",
+     "beats": 2,
+     "params": {
+      "lines": [
+       "FROM",
+       "PROTOTYPE",
+       "TO LIVE"
+      ]
+     }
+    },
+    {
+     "technique": "particle-morph",
+     "beats": 6,
+     "params": {
+      "kicker": "WHAT WE DO",
+      "items": [
+       {
+        "label": "STRATEGY",
+        "desc": "Product strategy",
+        "icon": "chart"
+       },
+       {
+        "label": "WEB",
+        "desc": "Web platforms",
+        "icon": "web"
+       },
+       {
+        "label": "AGENTS",
+        "desc": "AI agents",
+        "icon": "ai"
+       }
+      ]
+     }
+    },
+    {
+     "technique": "montage",
+     "beats": 2,
+     "params": {
+      "items": [
+       {
+        "title": "ATLAS"
+       },
+       {
+        "title": "BEACON"
+       },
+       {
+        "title": "MONSOON"
+       }
+      ]
+     }
+    },
+    {
+     "technique": "stat-odometer",
+     "beats": 2,
+     "params": {
+      "value": "40+",
+      "label": "launches"
+     },
+     "energy": 3
+    },
+    {
+     "technique": "logo-build",
+     "beats": 4
+    },
+    {
+     "technique": "end-card",
+     "beats": 12
+    }
+   ]
+  }
+ ]
+}

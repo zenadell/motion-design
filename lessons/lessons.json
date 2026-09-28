@@ -1,0 +1,1041 @@
+{
+  "version": 1,
+  "lessons": [
+    {
+      "id": "discrete-kinetic-phrase-states",
+      "rule": "Drive kinetic typography from a keyed array of state objects `[{t, text, color, glowRadius}]` and render strictly the state matching the current timestamp; never leave outgoing phrase layers visible underneath incoming words or let previous text ghost during transitions.",
+      "why": "In scene-1 (score 4.3), outgoing word 'lacking' lingered visible behind 'Ideas' at t=0.58s, creating overlapping letterforms instead of a clean state swap.",
+      "roles": [
+        "coder",
+        "director"
+      ],
+      "tags": [
+        "kinetic-type",
+        "timing",
+        "rhythm",
+        "layout"
+      ],
+      "mode": "exact",
+      "seen": 3,
+      "shown": 2,
+      "repeated": 2,
+      "created": "2026-09-28T11:51:56.236Z",
+      "updated": "2026-09-28T13:35:30.787Z",
+      "sources": [
+        "out/rep-pinterest2",
+        "out/rep-pinterest3",
+        "out/rep-pinterest4"
+      ]
+    },
+    {
+      "id": "radial-blast-shockwave-reveal",
+      "rule": "When animating expanding circular shockwaves, check the reference for terminal bounds: if bounded, constrain the circle radius to the documented diameter (e.g. 600–700px) and preserve the background field; never expand the circle to 250% canvas width or flood the entire canvas with solid color unless explicitly specified.",
+      "why": "In scene-2 (scores 5.1, 5.2), the coder scaled the red shockwave circle across the entire 1920x1080 canvas, turning the clean white background solid red, whereas the reference kept a 672px bounded circle on a white background.",
+      "roles": [
+        "coder"
+      ],
+      "tags": [
+        "transition",
+        "motion",
+        "ui",
+        "timing",
+        "glow"
+      ],
+      "mode": "exact",
+      "seen": 3,
+      "shown": 2,
+      "repeated": 2,
+      "created": "2026-09-28T11:51:56.236Z",
+      "updated": "2026-09-28T13:35:30.787Z",
+      "sources": [
+        "out/rep-pinterest2",
+        "out/rep-pinterest3",
+        "out/rep-pinterest4"
+      ]
+    },
+    {
+      "id": "tight-radial-backlight-bounds",
+      "rule": "Constrain text and UI glows to their target element's aspect ratio and bounding box (e.g. horizontally stretching canvas transforms to hug wordmarks) with tight falloffs (<1% frame area); never substitute wordmark halos with giant circular radial bursts that flood adjacent words or the canvas with ambient haze.",
+      "why": "In scene-7 (#1 score 4.4, r1 score 4.7), the coder rendered a giant circular radial glow (500x394px, 5.2x reference area) centered over 'Pin' rather than a tight, horizontally stretched 188x98px halo behind 'it', and flooded scene-5 and scene-6 with premature ambient hazes.",
+      "roles": [
+        "coder"
+      ],
+      "tags": [
+        "glow",
+        "kinetic-type",
+        "layout",
+        "ui",
+        "light_colour",
+        "typography"
+      ],
+      "mode": "exact",
+      "seen": 3,
+      "shown": 2,
+      "repeated": 2,
+      "created": "2026-09-28T11:51:56.236Z",
+      "updated": "2026-09-28T21:01:29.691Z",
+      "sources": [
+        "out/rep-pinterest2",
+        "out/rep-pinterest4"
+      ]
+    },
+    {
+      "id": "ui-cursor-click-depth-elevation",
+      "rule": "In original compositions where card interaction is directed, drive pointer cursors along Bezier paths, squeeze on click (scale: 0.90), and elevate the active card (scale: 1.15x–1.35x) while blurring background cards; in exact-copy mode, strictly follow the reference grid and never pop or blur cards unless documented in the frame log.",
+      "why": "In scene-4 (score 4.3), the coder zoomed the top-left card into the center foreground and blurred background cards, dropping the score because the reference kept all cards flat in the 2-column grid.",
+      "roles": [
+        "coder"
+      ],
+      "tags": [
+        "ui",
+        "motion",
+        "camera",
+        "layout"
+      ],
+      "mode": "any",
+      "seen": 3,
+      "shown": 2,
+      "repeated": 1,
+      "created": "2026-09-28T11:51:56.236Z",
+      "updated": "2026-09-28T13:35:30.787Z",
+      "sources": [
+        "out/rep-pinterest2",
+        "out/rep-pinterest3",
+        "out/rep-pinterest4"
+      ]
+    },
+    {
+      "id": "shot-boundary-artifact-purge",
+      "rule": "Cleanse all auxiliary UI elements, lingering action buttons, and cursor paths on frame 0 (t = 0.00s) of every new shot unless explicitly logged in the reference; never leave orphan buttons or cursor sprites floating from the preceding scene during transition morphs.",
+      "why": "In Scene 6 (score 4.4 -> 4.9), residual share buttons and cursor graphics lingered on frame 0 during the red pill button expansion, cluttering the opening frame.",
+      "roles": [
+        "coder"
+      ],
+      "tags": [
+        "layout",
+        "polish",
+        "transition"
+      ],
+      "mode": "any",
+      "seen": 1,
+      "shown": 2,
+      "repeated": 1,
+      "created": "2026-09-28T11:51:56.236Z",
+      "updated": "2026-09-28T13:35:30.787Z",
+      "sources": [
+        "out/rep-pinterest2"
+      ]
+    },
+    {
+      "id": "stroke-dash-monogram-reveal",
+      "rule": "When animating a cursive lettermark or logo draw-on, render the path using ctx.setLineDash([length, length]) and animate ctx.lineDashOffset from length down to 0 over the specified beat duration; never substitute path reveals with an instantaneous cut to a static icon badge or flat color fill.",
+      "why": "In Scene 2 (score 2.8 -> 4.9), the coder failed to draw the Pinterest cursive 'P' monogram path vertically, jumping straight to a flat red screen and a generic motionless badge.",
+      "roles": [
+        "coder"
+      ],
+      "tags": [
+        "logo",
+        "motion",
+        "timing"
+      ],
+      "mode": "any",
+      "seen": 1,
+      "shown": 2,
+      "repeated": 1,
+      "created": "2026-09-28T11:51:56.236Z",
+      "updated": "2026-09-28T13:01:05.119Z",
+      "sources": [
+        "out/rep-pinterest2"
+      ]
+    },
+    {
+      "id": "ui-masonry-feed-stagger",
+      "rule": "When rendering multi-card social or pinboard feeds, alternate column heights and vertical offsets (e.g., column 1: tall 460px then short 220px; column 2: short 280px then tall 400px) with opaque high-contrast fills (#BFBFBF–#C7C7C7); never arrange feed items into an identical, symmetrical 2x2 grid or washed-out low-contrast boxes.",
+      "why": "In scene-3 (#1 score 4.5, r1 score 4.8) and scene-4 (score 4.0), the coder rendered cards as a rigid, symmetrical 2x2 grid with washed-out faint outlines instead of the authentic staggered masonry layout.",
+      "roles": [
+        "coder",
+        "director"
+      ],
+      "tags": [
+        "ui",
+        "layout",
+        "composition"
+      ],
+      "mode": "any",
+      "seen": 1,
+      "shown": 1,
+      "repeated": 1,
+      "created": "2026-09-28T13:01:05.119Z",
+      "updated": "2026-09-28T13:35:30.787Z",
+      "sources": [
+        "out/rep-pinterest3"
+      ]
+    },
+    {
+      "id": "hero-type-auto-scaling",
+      "rule": "Calculate typography font sizes dynamically using ctx.measureText to enforce 75%–85% horizontal canvas occupancy (clamping font size so text width does not exceed 88% canvas width), and anchor placement using ctx.textAlign = 'center' at canvas.width / 2: never allow oversized letters to clip beyond viewport margins or collapse into timid centered blocks with vast negative space.",
+      "why": "In build-stamp r1 (score 4.2), the coder scaled up 'BUILD' to fix negative space but failed to center it within safe bounds, completely clipping the letter 'B' off the left side of the screen as 'UILD'.",
+      "roles": [
+        "coder"
+      ],
+      "tags": [
+        "kinetic-type",
+        "layout",
+        "typography"
+      ],
+      "mode": "invent",
+      "seen": 3,
+      "shown": 0,
+      "repeated": 0,
+      "created": "2026-09-28T11:48:20.235Z",
+      "updated": "2026-09-28T11:50:19.927Z",
+      "sources": [
+        "out/invent4-jomiez",
+        "out/invent5-jomiez",
+        "out/film20-luna"
+      ]
+    },
+    {
+      "id": "living-hold-and-exit-trigger",
+      "rule": "Never direct or code a brand resolve or hold as a 100% static freeze: even when holding a logo lockup on a final sustained chord, animate an impact settle on frame 0 (e.g. 4–6 frame stamp slam or ink snap) and maintain continuous micro-motion (such as 12fps boiling paper tooth, halftone grain, or 1.01x camera drift) throughout holds.",
+      "why": "In jomiez-lockup (v1: 3.4, r1: 3.9), the director specified 'Nothing moves after the cut: hold... perfectly still for all three beats', resulting in a dead 1.5s freeze that the critic flagged as an unmoving presentation slide.",
+      "roles": [
+        "coder",
+        "director"
+      ],
+      "tags": [
+        "timing",
+        "camera",
+        "motion",
+        "polish",
+        "director",
+        "coder"
+      ],
+      "mode": "invent",
+      "seen": 3,
+      "shown": 0,
+      "repeated": 0,
+      "created": "2026-09-28T11:47:34.477Z",
+      "updated": "2026-09-28T11:50:19.927Z",
+      "sources": [
+        "out/invent2-jomiez",
+        "out/invent5-jomiez",
+        "out/film20-luna"
+      ]
+    },
+    {
+      "id": "minimum-telemetry-legibility",
+      "rule": "Set secondary contact URLs, domain descriptors, and telemetry labels to a minimum font size of 18–22px with wide tracking (+15% to +25%) and high contrast (>= 4.5:1); never render them as sub-14px micro-type or unreadable blurry text.",
+      "why": "In S8 (#1 and r1), bottom URLs and metadata labels were rendered as sub-10px hairline micro-type, failing the end-card legibility and pulling scores to 5.6.",
+      "roles": [
+        "coder",
+        "director"
+      ],
+      "tags": [
+        "typography",
+        "layout",
+        "kinetic-type",
+        "ui"
+      ],
+      "mode": "invent",
+      "seen": 3,
+      "shown": 0,
+      "repeated": 0,
+      "created": "2026-09-28T11:47:34.477Z",
+      "updated": "2026-09-28T11:51:14.484Z",
+      "sources": [
+        "out/invent2-jomiez",
+        "out/film20-luna",
+        "out/film20-deepseek"
+      ]
+    },
+    {
+      "id": "backface-culling-and-ghost-suppression",
+      "rule": "In 3D typography and rotating cylinder setpieces, cull back-facing glyphs (dot product of surface normal and camera vector <= 0 or angle > 90°) to prevent inverted mirror-text from bleeding through, and maintain at least 40px vertical baseline separation between distinct stacked lines.",
+      "why": "In software-development (v1: 2.7, film1: 2.4), a hollow rotating 3D cylinder ribbon allowed reversed mirror-lettering from the back of the cylinder to bleed through, overlapping with foreground copy and making the words completely illegible.",
+      "roles": [
+        "coder"
+      ],
+      "tags": [
+        "3d",
+        "typography",
+        "camera",
+        "kinetic-type"
+      ],
+      "mode": "any",
+      "seen": 2,
+      "shown": 2,
+      "repeated": 0,
+      "created": "2026-09-28T11:49:09.627Z",
+      "updated": "2026-09-28T11:50:19.927Z",
+      "sources": [
+        "out/invent5-jomiez",
+        "out/film20-luna"
+      ]
+    },
+    {
+      "id": "brand-resolve-art-direction-continuity",
+      "rule": "Maintain the film's established art direction and textural system throughout brand resolves; never relapse into generic sci-fi HUD tropes (pitch-black void, thin glowing laser rules, radial lens flares, or corner targeting ticks) when the direction specifies tactile print, editorial broadsheet, or textured paper.",
+      "why": "In S7, the coder defaulted to generic radial blur volumetric light rays cutting to an empty pitch-black void, scoring 3.3 and abandoning the established screenprint identity.",
+      "roles": [
+        "coder",
+        "director"
+      ],
+      "tags": [
+        "logo",
+        "layout",
+        "light_colour",
+        "polish",
+        "glow"
+      ],
+      "mode": "invent",
+      "seen": 2,
+      "shown": 0,
+      "repeated": 0,
+      "created": "2026-09-28T11:48:20.235Z",
+      "updated": "2026-09-28T11:51:14.484Z",
+      "sources": [
+        "out/invent4-jomiez",
+        "out/film20-deepseek"
+      ]
+    },
+    {
+      "id": "exact-spring-damping-fidelity",
+      "rule": "Match the reference's spring physics directly: when the reference exhibits bouncy pop-ins with harmonic overshoot (e.g. 15%–25% overshoot settling over 0.5–0.7s), implement an underdamped spring (`S.spring(t, omega, zeta < 0.8)`); never replace directed bouncy UI pill or typographic hits with stiff linear tweens, zero-overshoot eases, or truncated static holds.",
+      "why": "In scene-6 (#1 score 4.4, r1 score 4.9) and scene-7 (#1 score 4.4, r1 score 4.7), the coder used stiff linear easing or premature settles on pill pop-in and typographic entrances, missing the reference's 19%–25% spring overshoot dynamics.",
+      "roles": [
+        "coder"
+      ],
+      "tags": [
+        "motion",
+        "timing",
+        "ui"
+      ],
+      "mode": "exact",
+      "seen": 2,
+      "shown": 0,
+      "repeated": 0,
+      "created": "2026-09-28T13:35:30.787Z",
+      "updated": "2026-09-28T21:01:29.691Z",
+      "sources": [
+        "out/rep-pinterest4"
+      ]
+    },
+    {
+      "id": "flat-vector-cursor-rendering",
+      "rule": "Render interactive OS cursors as flat 2D vector paths (e.g. white fill with a crisp 1–1.5px black outline, angled at 45°) scaled to standard desktop dimensions (24–32px); never render dark metallic, embossed, or faux-3D vertical emoji hands unless explicitly logged in the reference.",
+      "why": "In scene-4 (#1 score 4.3, r1 score 4.4) and scene-6 (#1 score 4.4, r1 score 4.9), the coder repeatedly drew a dark grey 3D-shaded vertical hand emoji instead of standard 45° flat vector pointer hands with black outlines.",
+      "roles": [
+        "coder"
+      ],
+      "tags": [
+        "ui",
+        "layout"
+      ],
+      "mode": "exact",
+      "seen": 2,
+      "shown": 0,
+      "repeated": 0,
+      "created": "2026-09-28T13:35:30.787Z",
+      "updated": "2026-09-28T21:01:29.691Z",
+      "sources": [
+        "out/rep-pinterest4"
+      ]
+    },
+    {
+      "id": "frame-zero-poster-start",
+      "rule": "Ensure frame 0 functions immediately as a high-density poster frame: never leave the primary text band or screen center empty for the first 0.5–1.0s. Either detonate high-inertia kinetic slam impacts on frame 0 or populate full-bleed background numerals and architectural registration grids.",
+      "why": "In proof-lin-co (3.7) and services-cascade (3.9), layouts held empty cards or static motionless titles for an entire second (1.0s) before any secondary animation or hero typography appeared.",
+      "roles": [
+        "coder",
+        "director"
+      ],
+      "tags": [
+        "timing",
+        "layout",
+        "composition",
+        "kinetic-type"
+      ],
+      "mode": "invent",
+      "seen": 2,
+      "shown": 0,
+      "repeated": 0,
+      "created": "2026-09-28T11:47:34.477Z",
+      "updated": "2026-09-28T11:49:09.627Z",
+      "sources": [
+        "out/invent2-jomiez",
+        "out/invent5-jomiez"
+      ]
+    },
+    {
+      "id": "monolithic-mechanical-impact-easing",
+      "rule": "Animate heavy titles, stamps, and print slabs using a 2–3 frame pullback anticipation (scale ~0.95) followed by steep exponential slam (easeOutQuint/Expo) and an explicit vertical squash-and-rebound on contact (e.g. scaleY: 0.88–0.92, scaleX: 1.08–1.12 settling over 100–150ms); never use uniform scale pops, unstyled cuts, or soft floating opacity fades.",
+      "why": "Across build-stamp (v1: 3.1), custom-software (film1: 4.7), and what-we-do-best (r1: 4.7), ink stamp hits and title entrances landed as weak digital pops or sliding fades without the physical squash-and-stretch overshoot requested in the direction.",
+      "roles": [
+        "coder"
+      ],
+      "tags": [
+        "motion",
+        "timing",
+        "typography",
+        "kinetic-type"
+      ],
+      "mode": "invent",
+      "seen": 2,
+      "shown": 0,
+      "repeated": 0,
+      "created": "2026-09-28T11:47:34.477Z",
+      "updated": "2026-09-28T11:50:19.927Z",
+      "sources": [
+        "out/invent2-jomiez",
+        "out/film20-luna"
+      ]
+    },
+    {
+      "id": "no-scifi-hud-in-editorial",
+      "rule": "Never render generic sci-fi HUD tropes—including thin 1px wireframe perspective floors, corner targeting brackets, laser scanning rules, and floating particle specks—when art direction calls for brutalist, risograph, or print editorial styling. Replace wireframes with heavy structural slabs and replace thin lines with inked rules (>= 8px) or registration bars.",
+      "why": "In S5, faint digital plexus lines cluttered the background, and in S6 r1, letterbox crosshairs and thin laser streaks were drawn in a radial void, scoring 3.5 and 4.1.",
+      "roles": [
+        "coder",
+        "director"
+      ],
+      "tags": [
+        "ui",
+        "layout",
+        "polish"
+      ],
+      "mode": "invent",
+      "seen": 2,
+      "shown": 0,
+      "repeated": 0,
+      "created": "2026-09-28T11:49:09.627Z",
+      "updated": "2026-09-28T11:51:14.484Z",
+      "sources": [
+        "out/invent5-jomiez",
+        "out/film20-deepseek"
+      ]
+    },
+    {
+      "id": "squeegee-wipe-clip-mask",
+      "rule": "When simulating physical squeegee, roller, or ink-drag reveals, drive the incoming element's appearance using a moving canvas ctx.clip() path or textured wipe edge with an explicit leading bar element (e.g. rubber blade or roller cylinder) moving in tandem; never substitute tactile tool sweeps with flat digital opacity fades or unmasked vector slides.",
+      "why": "In S5 (#1 and r1), the directed full-frame black squeegee blade was omitted entirely across both attempts, with the coder merely cutting or jittering static text cards, resulting in a 3.5 score.",
+      "roles": [
+        "coder"
+      ],
+      "tags": [
+        "motion",
+        "layout",
+        "timing"
+      ],
+      "mode": "invent",
+      "seen": 2,
+      "shown": 0,
+      "repeated": 0,
+      "created": "2026-09-28T11:50:19.927Z",
+      "updated": "2026-09-28T11:51:14.484Z",
+      "sources": [
+        "out/film20-luna",
+        "out/film20-deepseek"
+      ]
+    },
+    {
+      "id": "ui-pill-specular-sheen-sweep",
+      "rule": "When holding on an active UI pill button or confirmation badge, animate a diagonal specular highlight sheen (a 30°–45° white-to-transparent linear gradient translating across the clipped badge from -100% to +200% width over 0.6–0.9s with easeInOutCubic); never leave confirmation badges completely static during hold frames or substitute with a flat static gradient.",
+      "why": "In scene-6 (#1 score 4.4, r1 score 4.9), the coder rendered a flat static gradient across the 'Pined' confirmation badge instead of animating the directed diagonal white specular light sweep across its face.",
+      "roles": [
+        "coder"
+      ],
+      "tags": [
+        "ui",
+        "polish",
+        "lighting",
+        "motion",
+        "glow"
+      ],
+      "mode": "any",
+      "seen": 2,
+      "shown": 1,
+      "repeated": 0,
+      "created": "2026-09-28T13:01:05.119Z",
+      "updated": "2026-09-28T21:01:29.691Z",
+      "sources": [
+        "out/rep-pinterest3",
+        "out/rep-pinterest4"
+      ]
+    },
+    {
+      "id": "camera-crash-zoom-terminal-state",
+      "rule": "When executing a crash-zoom into 3D text geometry for a scene transition, push the camera completely through the glyph's aperture into full-bleed color/black or snap a 90-degree axial cut at peak velocity; never decelerate and stall the camera inside a single clipped, unreadable letter facet.",
+      "why": "In hook-slam-prism (4.1 & 4.6) and cylinder-vortex (2.8), the camera pushed linearly into letters ('W' and 'SOFTWARE') and froze on unreadable cropped white polygons and empty horizon gaps.",
+      "roles": [
+        "coder",
+        "director"
+      ],
+      "tags": [
+        "camera",
+        "3d",
+        "timing"
+      ],
+      "mode": "any",
+      "seen": 1,
+      "shown": 2,
+      "repeated": 0,
+      "created": "2026-09-28T11:49:09.627Z",
+      "updated": "2026-09-28T11:49:09.627Z",
+      "sources": [
+        "out/invent5-jomiez"
+      ]
+    },
+    {
+      "id": "cylinder-vortex-tier-separation",
+      "rule": "When wrapping multi-tier kinetic type around a 3D cylindrical surface or curved ribbon, assign explicit vertical Y-axis offsets (e.g. -240px, 0px, +240px) and expand the cylinder radius (R >= 650px) to prevent distinct counter-rotating typographic tiers from colliding into an illegible tangle.",
+      "why": "In cylinder-vortex (2.8), all three text tiers ('WEBSITES', 'AI SYSTEMS', 'SAAS PRODUCTS') were rendered along the same horizontal plane, colliding directly on top of each other and resulting in only 31% frame coverage.",
+      "roles": [
+        "coder"
+      ],
+      "tags": [
+        "3d",
+        "typography",
+        "layout"
+      ],
+      "mode": "any",
+      "seen": 1,
+      "shown": 2,
+      "repeated": 0,
+      "created": "2026-09-28T11:49:09.627Z",
+      "updated": "2026-09-28T11:49:09.627Z",
+      "sources": [
+        "out/invent5-jomiez"
+      ]
+    },
+    {
+      "id": "flanking-element-clearance",
+      "rule": "When positioning flanking modular slabs, auxiliary UI containers, or twin sub-labels around central typography, calculate bounds using ctx.measureText and enforce an explicit clearance of at least 80–120px outside the text boundaries to prevent occlusion or character overlaps.",
+      "why": "In custom-software-foundry (r2) and neural-synthesis (#1, #2), flanking modular plates occluded outer letterforms ('S' and 'E' of 'CUSTOM SOFTWARE') and twin 'INTELLIGENT SYSTEMS' boxes collided with overlapping characters, dropping scores to 3.7–4.7.",
+      "roles": [
+        "coder"
+      ],
+      "tags": [
+        "layout",
+        "typography",
+        "ui"
+      ],
+      "mode": "any",
+      "seen": 1,
+      "shown": 1,
+      "repeated": 0,
+      "created": "2026-09-28T11:47:34.477Z",
+      "updated": "2026-09-28T11:47:34.477Z",
+      "sources": [
+        "out/invent2-jomiez"
+      ]
+    },
+    {
+      "id": "glyph-counter-match-cut-origin",
+      "rule": "When executing a crash zoom into an interior glyph counter (such as the bowl of an 'O') for an iris match-cut, measure the target glyph's bounding center using ctx.measureText metrics and anchor ctx.translate(glyphCenterX, glyphCenterY) directly on that point before scaling; never scale from the canvas origin or word center.",
+      "why": "In iris-client-signature (scores 3.7–5.5), the camera zoom anchored off-center towards the ampersand and 'C', causing a jarring spatial mismatch when cutting to the concentric mechanical iris.",
+      "roles": [
+        "coder"
+      ],
+      "tags": [
+        "camera",
+        "kinetic-type",
+        "timing"
+      ],
+      "mode": "any",
+      "seen": 1,
+      "shown": 2,
+      "repeated": 0,
+      "created": "2026-09-28T11:48:20.235Z",
+      "updated": "2026-09-28T11:48:20.235Z",
+      "sources": [
+        "out/invent4-jomiez"
+      ]
+    },
+    {
+      "id": "graphic-print-over-phong-shading",
+      "rule": "In print, risograph, and ink press art directions, render geometry and text as flat graphic plates, multi-pass ink misregistrations, or high-contrast silhouette cuts; never shade elements with Phong specular highlights, rounded plastic 3D bevels, or metallic gradient spheres.",
+      "why": "In S1, S2, and S4, the coder rendered 3D beveled letters, clay-like shaded spheres, and reflective metallic brown cylinders, producing a dated 2000s slot-machine look that scored 3.0–4.8.",
+      "roles": [
+        "coder",
+        "director"
+      ],
+      "tags": [
+        "3d",
+        "light_colour",
+        "polish"
+      ],
+      "mode": "invent",
+      "seen": 1,
+      "shown": 0,
+      "repeated": 0,
+      "created": "2026-09-28T11:51:14.484Z",
+      "updated": "2026-09-28T11:51:14.484Z",
+      "sources": [
+        "out/film20-deepseek"
+      ]
+    },
+    {
+      "id": "kinetic-impact-color-snap",
+      "rule": "When animating rhythmic kinetic typography impacts, render incoming glyphs in vibrant brand accent color with peak radial bloom on frame 0 of the hit, then snap to high-contrast black (or dark ground) within 150–250ms (1–2 beats) as the backlight decays; never keep the text permanently in flat accent color or omit the entrance color flash.",
+      "why": "In scene-7 (score 5.2) and scene-1 (score 4.9), words either hit directly in solid black or remained flat red indefinitely, completely failing to execute the signature saturated-flash-to-black color snap.",
+      "roles": [
+        "coder",
+        "director"
+      ],
+      "tags": [
+        "kinetic-type",
+        "timing",
+        "glow",
+        "rhythm"
+      ],
+      "mode": "any",
+      "seen": 1,
+      "shown": 1,
+      "repeated": 0,
+      "created": "2026-09-28T13:01:05.119Z",
+      "updated": "2026-09-28T13:01:05.119Z",
+      "sources": [
+        "out/rep-pinterest3"
+      ]
+    },
+    {
+      "id": "no-digital-glitch-or-torn-paper-tropes",
+      "rule": "Never use horizontal digital glitch slice displacements or Photoshop-style jagged torn-paper banners when art direction specifies physical press mechanics; reveal or deform typography using continuous tool wipes (squeegees, rollers), fluid bleeds, or physical plate stamps.",
+      "why": "In S1 and S8, the coder sliced horizontal seams through hero type like a cyberpunk glitch, and in S2 used a faux torn-paper banner, destroying the screenprint aesthetic.",
+      "roles": [
+        "coder",
+        "director"
+      ],
+      "tags": [
+        "kinetic-type",
+        "layout"
+      ],
+      "mode": "invent",
+      "seen": 1,
+      "shown": 0,
+      "repeated": 0,
+      "created": "2026-09-28T11:51:14.484Z",
+      "updated": "2026-09-28T11:51:14.484Z",
+      "sources": [
+        "out/film20-deepseek"
+      ]
+    },
+    {
+      "id": "no-pill-buttons-in-editorial",
+      "rule": "Do not enclose secondary metadata, category tags, or sub-labels in rounded rectangular 'pill' button containers. Render technical tags as uncontained uppercase monospace typography with wide tracking (+20% to +35%) anchored directly along datum baselines or fine hairline bracket crosshairs.",
+      "why": "In proven-execution (#1, #2, r1, r2, film1), the coder repeatedly rendered 'WEBSITE DESIGN' and 'MOBILE APPS' inside rounded web UI button pills, keeping scores suppressed between 4.6 and 5.5 until forced to strip them out for clean monospace typography.",
+      "roles": [
+        "coder",
+        "director"
+      ],
+      "tags": [
+        "typography",
+        "ui",
+        "layout"
+      ],
+      "mode": "invent",
+      "seen": 1,
+      "shown": 0,
+      "repeated": 0,
+      "created": "2026-09-28T11:47:34.477Z",
+      "updated": "2026-09-28T11:47:34.477Z",
+      "sources": [
+        "out/invent2-jomiez"
+      ]
+    },
+    {
+      "id": "no-transition-dead-frames",
+      "rule": "When executing paper louvers, shearing bands, or directional wipes between beats, render incoming elements directly onto the moving panels or initiate incoming motion before the outgoing panels exit; never leave the canvas as a bare background for 100–300ms during transition splits.",
+      "why": "In riso-impact-hook and halftone-matrix-engine, horizontal louvers and wipes cleared the screen completely, leaving 00:00.750–00:00.910 as a dead blank canvas before the next text layer entered.",
+      "roles": [
+        "coder"
+      ],
+      "tags": [
+        "timing",
+        "kinetic-type",
+        "layout"
+      ],
+      "mode": "invent",
+      "seen": 1,
+      "shown": 0,
+      "repeated": 0,
+      "created": "2026-09-28T11:48:20.235Z",
+      "updated": "2026-09-28T11:48:20.235Z",
+      "sources": [
+        "out/invent4-jomiez"
+      ]
+    },
+    {
+      "id": "no-truncated-copy-in-ui",
+      "rule": "Never truncate directed UI strings, omit secondary metrics, or substitute directed text with placeholder dots; measure text bounds using `ctx.measureText` and fit the complete verbatim copy, author lines, and stats specified in the frame log.",
+      "why": "In scene-3, search text was truncated to 'Searc'; in scene-4, 'It's Very Simple.' was truncated to 'It's Very Simp' and the Philip Glass credit was replaced with dots, while metric cards were stripped of numbers.",
+      "roles": [
+        "coder"
+      ],
+      "tags": [
+        "ui",
+        "typography"
+      ],
+      "mode": "exact",
+      "seen": 1,
+      "shown": 0,
+      "repeated": 0,
+      "created": "2026-09-28T13:35:30.787Z",
+      "updated": "2026-09-28T13:35:30.787Z",
+      "sources": [
+        "out/rep-pinterest4"
+      ]
+    },
+    {
+      "id": "offscreen-canvas-trail-purge",
+      "rule": "When rendering moving UI cursors, particles, or overlays via offscreen canvas or layered draw routines, explicitly clear the buffer on every frame with ctx.clearRect(0, 0, width, height) before redrawing; never allow previous frame transforms or sprite blits to accumulate into ghost trails.",
+      "why": "In scene-4 r1, a cursor buffer clearing failure caused a cascading ghost trail of duplicate metallic hands frozen along the right side of the canvas, driving the polish score down to 2 and overall score from 4.0 to 3.5.",
+      "roles": [
+        "coder"
+      ],
+      "tags": [
+        "code-error",
+        "ui",
+        "performance"
+      ],
+      "mode": "any",
+      "seen": 1,
+      "shown": 1,
+      "repeated": 0,
+      "created": "2026-09-28T13:01:05.119Z",
+      "updated": "2026-09-28T13:01:05.119Z",
+      "sources": [
+        "out/rep-pinterest3"
+      ]
+    },
+    {
+      "id": "particle-shatter-reassemble-targets",
+      "rule": "When animating text or logo disintegration into particles that reassemble, store each particle's home anchor (targetX, targetY) sampled from the glyph geometry; disperse them outward during the burst phase, then interpolate (lerp) each particle strictly back to its home anchor before the reform beat rather than letting particles drift unboundedly off-screen or collapse into an arbitrary point.",
+      "why": "In ai-development (v1: 3.8, r1: 3.7), the coder first collapsed text into a single center dot, then replaced it with drifting polygonal shards that floated off into empty space without ever reforming the text as directed.",
+      "roles": [
+        "coder"
+      ],
+      "tags": [
+        "kinetic-type",
+        "motion",
+        "particles"
+      ],
+      "mode": "any",
+      "seen": 1,
+      "shown": 2,
+      "repeated": 0,
+      "created": "2026-09-28T11:50:19.927Z",
+      "updated": "2026-09-28T11:50:19.927Z",
+      "sources": [
+        "out/film20-luna"
+      ]
+    },
+    {
+      "id": "per-word-typographic-styling",
+      "rule": "When reference kinetic typography features mixed color styling or localized glows within a single phrase (e.g. 'Pin' in solid black, 'it' in dark red with a glowing halo), measure and render each word independently using `ctx.measureText` offsets; never render the phrase with a single uniform fillStyle and blanket centered glow.",
+      "why": "In scene-7 (#1 score 4.4, r1 score 4.7), the coder rendered 'Pin it' entirely in bright red with a center glow, missing the reference's split color styling ('Pin' in black, 'it' in dark red) and localized glow placement.",
+      "roles": [
+        "coder"
+      ],
+      "tags": [
+        "kinetic-type",
+        "typography",
+        "glow"
+      ],
+      "mode": "exact",
+      "seen": 1,
+      "shown": 0,
+      "repeated": 0,
+      "created": "2026-09-28T21:01:29.691Z",
+      "updated": "2026-09-28T21:01:29.691Z",
+      "sources": [
+        "out/rep-pinterest4"
+      ]
+    },
+    {
+      "id": "post-interaction-terminal-state",
+      "rule": "When a UI interaction (such as clicking a pin, save, or action button) is triggered mid-scene, continue the animation lifecycle through the directed post-click response (e.g. card collapse, shrink into a thumbnail, or modal dismissal) across the remaining scene duration; never freeze on a static clicked state and stall motion for the remainder of the shot.",
+      "why": "In scene-5 (#1 score 5.3, r1 score 5.4), after the cursor clicked the red pin button at t=0.65s, the coder froze the entire card and button layout static for the remaining 1.5 seconds instead of collapsing the hero card into a compact thumbnail at t=1.33s.",
+      "roles": [
+        "coder"
+      ],
+      "tags": [
+        "ui",
+        "motion",
+        "timing"
+      ],
+      "mode": "exact",
+      "seen": 1,
+      "shown": 0,
+      "repeated": 0,
+      "created": "2026-09-28T21:01:29.691Z",
+      "updated": "2026-09-28T21:01:29.691Z",
+      "sources": [
+        "out/rep-pinterest4"
+      ]
+    },
+    {
+      "id": "premature-element-suppression",
+      "rule": "When an element or transition phase is directed to appear at an explicit timestamp `t_start` (e.g. t >= 0.25s), guard its drawing logic strictly (`if (t < t_start) return;`); never render faint lines, partial bounding boxes, or background glow halos in the center of the frame before the element's activation beat.",
+      "why": "In scene-6 (#1 score 4.4, r1 score 4.9), the coder rendered a thin red line with a 2.0% pale pink haze in the center of the screen at t=0.08s while the reference center was completely blank until the morph at t=0.25s.",
+      "roles": [
+        "coder"
+      ],
+      "tags": [
+        "timing",
+        "ui",
+        "glow"
+      ],
+      "mode": "any",
+      "seen": 1,
+      "shown": 0,
+      "repeated": 0,
+      "created": "2026-09-28T21:01:29.691Z",
+      "updated": "2026-09-28T21:01:29.691Z",
+      "sources": [
+        "out/rep-pinterest4"
+      ]
+    },
+    {
+      "id": "risograph-overprint-compositing",
+      "rule": "Simulate risograph or print ink overprinting using ctx.globalCompositeOperation = 'multiply' on light backgrounds (or 'screen' on dark backgrounds) with deliberate 4–12px misregistration offsets between plates; never approximate print separation using opaque stacked drop-shadows or faux-extruded 3D bevels.",
+      "why": "In overprint-color-split, attempts scored 2.7–4.4 because the coder drew faux-extruded 3D drop shadows and opaque color blocks rather than authentic multiply blend overprinting.",
+      "roles": [
+        "coder"
+      ],
+      "tags": [
+        "light_colour",
+        "kinetic-type"
+      ],
+      "mode": "any",
+      "seen": 1,
+      "shown": 1,
+      "repeated": 0,
+      "created": "2026-09-28T11:48:20.235Z",
+      "updated": "2026-09-28T11:48:20.235Z",
+      "sources": [
+        "out/invent4-jomiez"
+      ]
+    },
+    {
+      "id": "safe-text-clip-padding",
+      "rule": "When revealing text via canvas clip() paths or directional wipe masks, pad the clipping bounds by at least 15–20% beyond measured font height and string width to avoid truncating ascenders, descenders, and outer letterform strokes.",
+      "why": "In modular-scale (#1, #2), wipe masks clipped both 'PRODUCTS' and 'WORLDWIDE' awkwardly throughout the intro and freeze hold, dragging scene scores down to 4.5.",
+      "roles": [
+        "coder"
+      ],
+      "tags": [
+        "typography",
+        "layout",
+        "code-error"
+      ],
+      "mode": "any",
+      "seen": 1,
+      "shown": 2,
+      "repeated": 0,
+      "created": "2026-09-28T11:47:34.477Z",
+      "updated": "2026-09-28T11:47:34.477Z",
+      "sources": [
+        "out/invent2-jomiez"
+      ]
+    },
+    {
+      "id": "scope-safe-scene-helpers",
+      "rule": "Isolate drawing phase variables and helper instantiations inside explicit block scopes `{ ... }` or use unique identifier names; never declare duplicate `const` or `let` identifiers (such as `spr`, `pill`, `w`, `h`) within the same scene function.",
+      "why": "Scene-5 crashed engine tests before rendering a single frame because `Identifier 'spr' has already been declared`, while scene-6 threw `Unexpected identifier 'pill'`.",
+      "roles": [
+        "coder"
+      ],
+      "tags": [
+        "code-error"
+      ],
+      "mode": "any",
+      "seen": 1,
+      "shown": 0,
+      "repeated": 0,
+      "created": "2026-09-28T13:35:30.787Z",
+      "updated": "2026-09-28T13:35:30.787Z",
+      "sources": [
+        "out/rep-pinterest4"
+      ]
+    },
+    {
+      "id": "sequential-stack-displacement",
+      "rule": "When animating sequential text lines into a multi-tier column stack, compute each tier's final baseline position prior to entrance and animate preceding lines to their target positions using an easing curve triggered on the exact impact frame of each incoming tier; never stamp an incoming line directly over an existing line.",
+      "why": "In halftone-matrix-engine, 'SOFTWARE DEVELOPMENT' slammed directly on top of 'WEBSITE DESIGN' at 00:01.000 in an illegible collision before abruptly shifting down.",
+      "roles": [
+        "coder"
+      ],
+      "tags": [
+        "kinetic-type",
+        "timing",
+        "layout"
+      ],
+      "mode": "any",
+      "seen": 1,
+      "shown": 2,
+      "repeated": 0,
+      "created": "2026-09-28T11:48:20.235Z",
+      "updated": "2026-09-28T11:48:20.235Z",
+      "sources": [
+        "out/invent4-jomiez"
+      ]
+    },
+    {
+      "id": "simulated-input-typing-cadence",
+      "rule": "When simulating search input changes, animate previous text clearing letter-by-letter (40–60ms/char) or via rapid selection wipe, pause 1–2 beats with a blinking caret, and type new characters sequentially at 50–80ms intervals; never vanish the string instantaneously and stall on a dead static bar for >0.5s.",
+      "why": "In Scene 3 (score 4.8 -> 5.0), 'Search' vanished instantaneously at 1.7 s, leaving a 1.33 s dead freeze before 'Ui animations' abruptly appeared, dragging down rhythm and motion scores.",
+      "roles": [
+        "coder"
+      ],
+      "tags": [
+        "ui",
+        "timing",
+        "kinetic-type"
+      ],
+      "mode": "any",
+      "seen": 1,
+      "shown": 2,
+      "repeated": 0,
+      "created": "2026-09-28T11:51:56.236Z",
+      "updated": "2026-09-28T11:51:56.236Z",
+      "sources": [
+        "out/rep-pinterest2"
+      ]
+    },
+    {
+      "id": "staggered-grid-entrance-timing",
+      "rule": "In exact-copy multi-card feeds and search results, gate card entrances strictly by their logged reference timestamps (e.g. top row visible at t=0.20s, bottom row sliding in at t=0.80s) and keep cursor hover drifting actively; never pop all grid rows simultaneously on frame 0, freeze cursor drift into dead zones, or trigger card zoom modals ahead of schedule.",
+      "why": "In scene-4 (#1 score 4.3, r1 score 4.4), the coder spawned all 4 cards at full size at t=0.33s instead of staggering the bottom cards at t=0.83s, froze motion during a 2-second idle dead zone, and triggered the zoom modal too early.",
+      "roles": [
+        "coder"
+      ],
+      "tags": [
+        "ui",
+        "timing",
+        "layout"
+      ],
+      "mode": "exact",
+      "seen": 1,
+      "shown": 0,
+      "repeated": 0,
+      "created": "2026-09-28T21:01:29.691Z",
+      "updated": "2026-09-28T21:01:29.691Z",
+      "sources": [
+        "out/rep-pinterest4"
+      ]
+    },
+    {
+      "id": "strict-beat-grid-quantization",
+      "rule": "Compute all transition triggers, visual impacts, and scene cuts using strict musical beat quantization (e.g. Math.round(t / beatDuration) * beatDuration or explicit beat-index helpers); never hardcode arbitrary floating-point seconds that drift 30–50ms off the 16th-note tempo grid.",
+      "why": "In S2, S4, and S5, hardcoded cutoffs (such as 0.533s, 2.033s, and 2.05s instead of 0.500s and 2.000s at 120 BPM) broke downbeat synchronization and degraded rhythm scores down to 2–4.",
+      "roles": [
+        "coder"
+      ],
+      "tags": [
+        "timing",
+        "rhythm"
+      ],
+      "mode": "any",
+      "seen": 1,
+      "shown": 2,
+      "repeated": 0,
+      "created": "2026-09-28T11:51:14.484Z",
+      "updated": "2026-09-28T11:51:14.484Z",
+      "sources": [
+        "out/film20-deepseek"
+      ]
+    },
+    {
+      "id": "terminal-scene-transition-execution",
+      "rule": "When scene direction specifies an exit transition or breath hold on the final beat (e.g. a color sweep, sheet wipe, or camera dive before the cut), verify the scene duration spans all directed beats and code the transition logic explicitly for that final beat; never stop animation logic at the hero text resolve and let the scene stall or cut out prematurely.",
+      "why": "In what-we-do-best (v1: 5.0, r1: 4.7, film1: 5.8), across all three versions the coder animated the word reveals ('WHAT', 'WE DO', 'BEST') but omitted Beat 37's full-bleed sheet sweep and central ink-pool hold, leaving the scene hanging statically before the brand cut.",
+      "roles": [
+        "coder",
+        "director"
+      ],
+      "tags": [
+        "timing",
+        "motion",
+        "layout"
+      ],
+      "mode": "any",
+      "seen": 1,
+      "shown": 2,
+      "repeated": 0,
+      "created": "2026-09-28T11:50:19.927Z",
+      "updated": "2026-09-28T11:50:19.927Z",
+      "sources": [
+        "out/film20-luna"
+      ]
+    },
+    {
+      "id": "typographic-energy-collapse",
+      "rule": "When choreographing a rhythmic transition where typography condenses into a focal core, compress letterforms using geometric slicing masks or converging shard bands into a radiant graphic mark (>= 180–240px) with screen shake; never shrink the entire layout uniformly into a tiny 40px icon floating in an empty void.",
+      "why": "In proof-lin-co (3.7 & 4.9), the coder lazily scaled the entire scene down into a tiny 40px glowing diamond floating lost in an empty black void.",
+      "roles": [
+        "coder",
+        "director"
+      ],
+      "tags": [
+        "motion",
+        "kinetic-type",
+        "layout"
+      ],
+      "mode": "invent",
+      "seen": 1,
+      "shown": 0,
+      "repeated": 0,
+      "created": "2026-09-28T11:49:09.627Z",
+      "updated": "2026-09-28T11:49:09.627Z",
+      "sources": [
+        "out/invent5-jomiez"
+      ]
+    },
+    {
+      "id": "ui-camera-push-focus",
+      "rule": "During UI interaction sequences (such as typing into a search bar or inspecting an active card), animate camera scale dynamically (e.g. smooth easeInOutCubic push from 1.0x to 1.20x–1.35x centered on the active component) while keeping overall layout bounds within 55%–65% frame width to prevent peripheral clipping.",
+      "why": "In scene-3 (score 4.8), the camera remained static at 1.0x despite typing action, while in scene-4 r1 (score 3.5), an uncontrolled over-zoom clipped the right-hand card typography.",
+      "roles": [
+        "coder",
+        "director"
+      ],
+      "tags": [
+        "camera",
+        "ui",
+        "motion"
+      ],
+      "mode": "any",
+      "seen": 1,
+      "shown": 1,
+      "repeated": 0,
+      "created": "2026-09-28T13:01:05.119Z",
+      "updated": "2026-09-28T13:01:05.119Z",
+      "sources": [
+        "out/rep-pinterest3"
+      ]
+    },
+    {
+      "id": "viscous-ink-metaball-composite",
+      "rule": "Simulate viscous liquid drops, ink splatters, and melting letterforms using thresholded blur compositing (e.g. drawing circular clusters through ctx.filter = 'blur(16px) contrast(30)' on an offscreen canvas); never substitute wet ink with dry point particles, scratch lines, or static vector stamps.",
+      "why": "In S1, S2, and S8, the coder repeatedly relied on thin wireframe scratch debris, static grunge stamps, or generic radial particle swarms, failing the directed wet ink fluid simulation.",
+      "roles": [
+        "coder"
+      ],
+      "tags": [
+        "motion",
+        "polish"
+      ],
+      "mode": "any",
+      "seen": 1,
+      "shown": 1,
+      "repeated": 0,
+      "created": "2026-09-28T11:51:14.484Z",
+      "updated": "2026-09-28T11:51:14.484Z",
+      "sources": [
+        "out/film20-deepseek"
+      ]
+    }
+  ]
+}

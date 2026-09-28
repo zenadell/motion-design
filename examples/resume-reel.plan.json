@@ -1,0 +1,128 @@
+{
+  "version": 1,
+  "meta": {
+    "title": "Résumé Reel",
+    "fps": 60,
+    "hud": true,
+    "captions": true,
+    "grain": 0.07
+  },
+  "brand": {
+    "name": "Claude",
+    "suffix": "",
+    "tagline": "Motion Designer",
+    "site": "",
+    "email": "",
+    "colors": {
+      "bg": "#0A0A0B",
+      "text": "#F2EEE6",
+      "primary": "#FF3B1F",
+      "secondary": "#2440FF",
+      "accent": "#D8FF3A",
+      "light": "#F2EEE6",
+      "dark": "#0A0A0B"
+    },
+    "fonts": {
+      "display": "Inter Tight",
+      "serif": "Instrument Serif",
+      "mono": "JetBrains Mono"
+    },
+    "tile": false
+  },
+  "music": {
+    "bpm": 120,
+    "genre": "electro",
+    "progression": [
+      "Am",
+      "F",
+      "C",
+      "G"
+    ]
+  },
+  "sections": [
+    {
+      "technique": "word-cuts",
+      "beats": 1.5,
+      "params": {
+        "words": [
+          "I",
+          "MAKE",
+          "THINGS"
+        ],
+        "styles": [
+          "serif",
+          "rise",
+          "stack"
+        ],
+        "tones": [
+          "dark",
+          "light",
+          "brand"
+        ]
+      }
+    },
+    {
+      "technique": "impact-word",
+      "beats": 2.5,
+      "params": {
+        "word": "MOVE",
+        "anticipate": true
+      },
+      "transition": {
+        "type": "slice",
+        "beats": 0.5
+      }
+    },
+    {
+      "technique": "marquee",
+      "beats": 2,
+      "params": {
+        "text": "MOTION DESIGN / KINETIC TYPE / "
+      },
+      "label": "Typography"
+    },
+    {
+      "technique": "type-drop",
+      "beats": 4,
+      "params": {
+        "word": "TYPE",
+        "morphTo": "FORM"
+      },
+      "label": "Typography"
+    },
+    {
+      "technique": "mitosis-grid",
+      "beats": 6,
+      "label": "Shape play"
+    },
+    {
+      "technique": "portal-dolly",
+      "beats": 6,
+      "params": {
+        "words": [
+          "DOLLY",
+          "ROLL",
+          "WHIP"
+        ]
+      },
+      "label": "Camera"
+    },
+    {
+      "technique": "albers-colour",
+      "beats": 4,
+      "label": "Colour"
+    },
+    {
+      "technique": "signature-card",
+      "beats": 4,
+      "params": {
+        "role": "Motion Designer",
+        "meta": [
+          "Résumé reel — 2026",
+          "Typography · Shape · Camera · Colour",
+          "15 sec · 120 BPM"
+        ]
+      }
+    }
+  ]
+}
