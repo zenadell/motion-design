@@ -34,6 +34,8 @@ export function buildHtml(plan: Plan): string {
   const engine = readFileSync(process.env.MOTION_ENGINE_PATH || join(ROOT, 'dist', 'engine.js'), 'utf8').replace(/<\/script/gi, '<\\/script');
   const needsLand = plan.sections.some(s => s.technique === 'dot-globe') || /globe/.test(JSON.stringify(plan.custom ?? ''));
   const land = needsLand ? readFileSync(join(ROOT, 'assets', 'land-dots.json'), 'utf8') : '[]';
+  const needs3d = /S\.three\b|\b(logo3d|type3d|shapes3d)\b/.test(JSON.stringify(plan.custom ?? ''));
+  const three = needs3d ? `<script>${readFileSync(process.env.MOTION_THREE_PATH || join(ROOT, 'dist', 'three.js'), 'utf8').replace(/<\/script/gi, '<\\/script')}</script>\n` : '';
   const c = plan.brand.colors;
   const data = JSON.stringify(plan).replace(/</g, '\\u003c');
   return `<!doctype html>
@@ -69,7 +71,7 @@ body.export #play,body.export #hint{display:none}
 <button id="play" type="button"><i></i><span id="playLabel">Play</span><small>sound on</small></button>
 </div>
 <div id="hint">space play / pause · r restart · ← → step frame · m mute</div>
-<script>${engine}</script>
+${three}<script>${engine}</script>
 <script>MotionEngine.boot({plan:${data},land:${land}});</script>
 </body>
 </html>

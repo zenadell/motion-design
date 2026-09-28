@@ -23,6 +23,18 @@ await build({
   outfile: 'dist/engine.js',
 });
 
+// optional real-3D bundle (Three.js), inlined only into reels that use it
+await build({
+  entryPoints: ['src/engine/three3d/index.ts'],
+  bundle: true,
+  format: 'iife',
+  platform: 'browser',
+  target: 'es2022',
+  minify: true,
+  legalComments: 'none',
+  outfile: 'dist/three.js',
+});
+
 await build({
   entryPoints: ['src/cli/index.ts'],
   bundle: true,
@@ -35,4 +47,4 @@ await build({
   plugins: [raw],
 });
 chmodSync('dist/cli.js', 0o755);
-console.log('built dist/engine.js and dist/cli.js');
+console.log('built dist/engine.js, dist/three.js and dist/cli.js');

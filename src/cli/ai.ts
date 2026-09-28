@@ -224,13 +224,15 @@ export async function runAi(cmd: string, pos: string[], flags: Flags): Promise<b
     }
     case 'replicate': {
       if (!pos[0]) throw new Error('missing <reference.mp4>');
-      if (!str(flags.brand)) throw new Error('missing --brand brand.json');
+      const exact = !!flags.exact;
+      if (!str(flags.brand) && !exact) throw new Error('missing --brand brand.json (or use --exact for a straight copy)');
       const dir = out ?? 'out/replicate';
       const llm = gemini(flags);
-      const kit = loadBrandKit(JSON.parse(readFileSync(str(flags.brand)!, 'utf8')));
+      // an exact copy takes its colours and words from the reference; the kit is only a placeholder then
+      const kit = loadBrandKit(str(flags.brand) ? JSON.parse(readFileSync(str(flags.brand)!, 'utf8')) : { brand: { name: 'Reference', colors: { bg: '#0B0B0D', text: '#FFFFFF', primary: '#FF4D2E', secondary: '#FFFFFF' } } });
       const sub = (flag: string) => roleModel(flags, flag);
       const res = await replicate(llm, {
-        videoFile: pos[0], kit, brief: readBrief(flags), keepColors: !!flags['keep-colors'],
+        videoFile: pos[0], kit, brief: readBrief(flags), keepColors: !!flags['keep-colors'], exact,
         candidates: num(flags.candidates), rounds: num(flags.rounds), filmRounds: flags['no-qa'] ? 0 : num(flags['film-rounds']),
         budget: num(flags.budget), target: num(flags.target), render: !flags['no-render'], workers: num(flags.workers) ?? 3, outDir: dir, log,
         codeLLM: sub('code-model'), criticLLM: sub('critic-model'),

@@ -63,7 +63,7 @@ export interface InventOptions {
   /** Reference films that define the quality bar: videos (shown to director and critics) and their source code (shown to the coder). */
   bar?: { videos: Buffer[]; code?: string };
   /** Extra context for every scene prompt and critique (replicate mode: the reference breakdown). */
-  reference?: { note: string; clips?: Buffer[] };
+  reference?: { note: string; clips?: Buffer[]; exact?: boolean };
 }
 
 export interface SceneCode {
@@ -262,8 +262,10 @@ export async function invent(llm: LLM, o: InventOptions) {
           const part = e.where === 'custom.lib' ? 'lib' : e.where === 'custom.score' ? 'score' : e.where.includes(':sound') ? `${e.where.split('#')[0]} sfx` : `${e.where.split('#')[0]} draw`;
           problems.push(`${part} threw ${at ? `at t=${at}s ` : ''}"${e.message}"${e.stack ? ` (${e.stack.split('\n').filter(l => /scene-|custom-/.test(l)).slice(0, 2).map(l => l.trim()).join(' / ')})` : ''}`);
         }
+        const uses3d = /S\.three\b|\b(logo3d|type3d|shapes3d)\b/.test(JSON.stringify(input.custom ?? ''));
         res.probes.forEach((ps, k) => {
-          const slow = ps.filter(p => p.ms > 80);
+          // software WebGL is slower; 3D scenes get a larger frame budget
+          const slow = ps.filter(p => p.ms > (uses3d ? 250 : 80));
           if (slow.length) problems.push(`${reel.sections[k].technique}: too slow, ${Math.round(Math.max(...slow.map(p => p.ms)))} ms per frame at t=${slow.map(p => p.t.toFixed(2)).join(', ')}s (budget 40 ms)`);
           if (ps.every(p => p.std < 0.012)) problems.push(`${reel.sections[k].technique}: every sampled frame is a flat colour; nothing visible is drawn`);
         });
@@ -334,6 +336,14 @@ export async function invent(llm: LLM, o: InventOptions) {
         await reel.page.context().close();
       }
     };
+    /** Replicate mode: the reference segment this scene must match, shown to the coder. */
+    const refTarget = (i: number): Part[] => {
+      const clip = o.reference?.clips?.[i];
+      if (!clip) return [];
+      return [text(o.reference?.exact
+        ? 'THE TARGET: the reference segment this scene must reproduce EXACTLY (same composition, sizes, positions, colours, words, timing and motion). Match it frame for frame:'
+        : 'THE REFERENCE SEGMENT this scene is modelled on (match its craft, composition and motion):'), video(clip, 12)];
+    };
     const measured = (m: MotionReport, b?: ReturnType<typeof beatReport>) =>
       `MEASURED ON THE RENDER (objective): average frame coverage ${Math.round(m.coverage * 100)}%, empty frames ${Math.round(m.emptyShare * 100)}%, mean motion ${(m.motion * 1000).toFixed(1)}‰ per 1/12 s${b ? `, beat precision ${Math.round(b.sync * 100)}% of ${b.hardChanges} hard changes on the 16th grid` : ''}${m.flags.length ? `\nProblems: ${m.flags.join(' ')}` : ' (no measured problems)'}`;
     const critique = async (i: number, cm: { clip: Buffer; m: MotionReport; beat?: ReturnType<typeof beatReport> }, tag: string) => {
@@ -387,7 +397,7 @@ export async function invent(llm: LLM, o: InventOptions) {
             return { code: scenes[i], score: cr.s, critique: cr.c, clip: cr.clip };
           })()]
         : await Promise.all(Array.from({ length: o.candidates ?? 2 }, async (_, k) => {
-        const r = await ask<SceneCode>(codeLLM, `code ${s.id} #${k + 1}`, coder(), [sceneUser(d, lib, i, bpm) + refNote + (k ? `\n\n(Candidate ${k + 1}: take a clearly different creative approach to the same brief.)` : '')], sceneSchema(), 'high');
+        const r = await ask<SceneCode>(codeLLM, `code ${s.id} #${k + 1}`, coder(), [sceneUser(d, lib, i, bpm) + refNote + (k ? `\n\n(Candidate ${k + 1}: take a clearly different creative approach to the same brief.)` : ''), ...refTarget(i)], sceneSchema(), 'high');
         const ok = await testFix(i, cleanScene(r), `#${k + 1}`);
         if (!ok) return null;
         const cr = await critique(i, await clipOf(i, scenePlan(i, ok)), `#${k + 1}`);
@@ -413,7 +423,8 @@ export async function invent(llm: LLM, o: InventOptions) {
       for (let r = 1; r <= (o.rounds ?? 2) && cur.score < target && !overBudget(); r++) {
         const rw = await ask<SceneCode>(codeLLM, `rewrite ${s.id} · ${r}`, coder(), [
           rewriteUser(d, lib, i, bpm, cur.code, cur.critique, cur.score) + refNote,
-          text('THE CLIP THE REVIEW IS ABOUT:'), video(cur.clip, 12),
+          ...refTarget(i),
+          text('THE CLIP THE REVIEW IS ABOUT (your current version):'), video(cur.clip, 12),
         ], sceneSchema(), 'high');
         const ok = await testFix(i, cleanScene(rw, cur.code), `r${r}`);
         if (!ok) continue;

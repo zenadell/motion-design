@@ -94,10 +94,12 @@ describe('set pieces', () => {
   it('documents every set piece the director can choose', () => {
     const T = { bg: '#0A0C14', text: '#EEF1F8', primary: '#3D5AFE', secondary: '#FF5A36', accent: '#FFD23F', surface: '#151822', muted: '#8A90A0', light: '#FFFFFF', dark: '#000000' };
     const api = setPieces({ theme: T as never, logo: { path: null, d: null, box: [0, 0, 100, 100], monogram: 'N' }, eases: {}, layerOf: (() => ({})) as never });
-    for (const k of SETPIECES.filter(k => k !== 'none')) {
-      expect(typeof (api as Record<string, unknown>)[k], k).toBe('function');
+    const threeD = ['logo3d', 'type3d', 'shapes3d'];
+    for (const k of SETPIECES.filter(k => k !== 'none' && k !== 'three')) {
+      if (!threeD.includes(k)) expect(typeof (api as Record<string, unknown>)[k], k).toBe('function');
       expect(SETPIECE_DOCS).toContain(`S.set.${k}(`);
     }
+    expect(STAGE_DOCS).toContain('S.three.view(');
     expect(STAGE_DOCS).toContain('S.set.swarm(');
   });
 });
@@ -139,5 +141,30 @@ describe('direction check', () => {
     const scene = { id: 'a', title: 'A', beats: 4, idea: 'x', onscreenText: [], transition: 'cut' };
     expect(directionProblems({ title: 'T', look: {} as never, scenes: [scene, scene, scene] })).toEqual([]);
     expect(directionProblems({ title: 'T', look: {} as never, scenes: [scene, scene, { ...scene, idea: '' }] })).toEqual(['1 scene(s) without an idea or beats']);
+  });
+});
+
+import { traceContours } from '../src/engine/assets/trace';
+import { buildHtml } from '../src/cli/html';
+describe('3D support', () => {
+  it('traces a straight-edged shape as one clean outline', () => {
+    const W = 12, H = 12, m = new Uint8Array(W * H);
+    for (let y = 2; y < 9; y++) for (let x = 4; x < 7; x++) m[y * W + x] = 1;
+    const loops = traceContours(m, W, H, 3);
+    expect(loops.length).toBe(1);
+    expect(loops[0].every(([x, y]) => x === 4 || x === 6 || y === 2 || y === 8)).toBe(true);
+  });
+  it('inlines the 3D bundle only when a scene uses it', () => {
+    const base = JSON.parse(readFileSync('test/fixtures/presets.plan.json', 'utf8'));
+    const v2 = validatePlan(base);
+    const v3 = validatePlan({ ...base, custom: { scenes: base.custom.scenes.map((s: { draw: string }, i: number) => (i ? s : { ...s, draw: "S.set.logo3d(g, t, { material: 'chrome' });" })) } });
+    if (!v2.ok || !v3.ok) throw new Error('fixture');
+    process.env.MOTION_ENGINE_PATH = 'package.json';
+    process.env.MOTION_THREE_PATH = 'package.json';
+    const marker = readFileSync('package.json', 'utf8').slice(0, 40);
+    expect(buildHtml(v2.plan).split(marker).length - 1).toBe(1);
+    expect(buildHtml(v3.plan).split(marker).length - 1).toBe(2);
+    delete process.env.MOTION_ENGINE_PATH;
+    delete process.env.MOTION_THREE_PATH;
   });
 });

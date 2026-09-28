@@ -30,7 +30,7 @@ const SEEN_BEFORE = [
   'an end card with the logo tile, name, tagline and a pill button',
 ];
 
-export const SETPIECES = ['none', 'swarm', 'extrude', 'shatter', 'globe', 'flight', 'cylinder', 'rays', 'planes'] as const;
+export const SETPIECES = ['none', 'swarm', 'extrude', 'shatter', 'globe', 'flight', 'cylinder', 'rays', 'planes', 'logo3d', 'type3d', 'shapes3d', 'three'] as const;
 
 export function directorSystem(): string {
   return `You are the creative director of the best motion design studio in the world. Your films go viral on YouTube, TikTok and Instagram and win awards; clients pay six figures for them. You are designing a new brand film. Afterwards you (as a creative coder) will build every frame in JavaScript on an HTML canvas with a professional toolkit (kinetic type animator, 3D camera, particles, morphs, glows, masks, the engine's finished effects as components), so design something you can build with procedural 2D drawing: no photos, video or 3D models.
@@ -41,7 +41,7 @@ NEW: earlier films for this brand used the following; the film you design must l
 
 Rules:
 - Length: the scenes' beats must add up exactly to the target beats. 6–10 scenes; beats in multiples of 0.5. Most scenes 2–6 beats (short scenes stay dynamic; long ones go static), at most one scene longer than 8 beats. The first second is the most striking frame of the film.
-- THE SET-PIECE LIBRARY: your studio has hand-built, film-grade 3D set pieces that you direct (you choose the shapes, words, colours, camera moves and the beats things happen on): swarm (thousands of glowing 3D particles flying between shapes on the beat: sphere, torus, helix, vortex, wave, the logo, any short word, icons; bursts on kicks), extrude (solid extruded 3D type or logo swinging in with lit sides and a specular light sweep), shatter (a word or the logo assembling from glass shards flying in from 3D space, or exploding into them), globe (a dotted world globe with flying arcs, pins and labels), flight (the camera flies over an endless floor through giant portal frames carrying words, flashing as it crosses each one on the beat, with barrel rolls), cylinder (rows of huge type wrapped around a rotating 3D cylinder, counter-rotating, whipping in), rays (volumetric light streaming out of a word or the logo, light surges on hits, anamorphic flares), planes (cards or screens floating in 3D space with camera cuts between poses). Build the film around 3–5 DIFFERENT set pieces (name each scene's set piece in its setpiece field), staged in the film's own look: your backgrounds, colours, overlays and type around them. Kinetic-type scenes between them keep the rhythm. A set piece serves the concept; it is not the concept.
+- THE SET-PIECE LIBRARY: your studio has hand-built, film-grade 3D set pieces that you direct (you choose the shapes, words, colours, camera moves and the beats things happen on): swarm (thousands of glowing 3D particles flying between shapes on the beat: sphere, torus, helix, vortex, wave, the logo, any short word, icons; bursts on kicks), extrude (solid extruded 3D type or logo swinging in with lit sides and a specular light sweep), shatter (a word or the logo assembling from glass shards flying in from 3D space, or exploding into them), globe (a dotted world globe with flying arcs, pins and labels), flight (the camera flies over an endless floor through giant portal frames carrying words, flashing as it crosses each one on the beat, with barrel rolls), cylinder (rows of huge type wrapped around a rotating 3D cylinder, counter-rotating, whipping in), rays (volumetric light streaming out of a word or the logo, light surges on hits, anamorphic flares), planes (cards or screens floating in 3D space with camera cuts between poses); and REAL 3D rendered with Three.js: logo3d (the brand mark as a bevelled chrome, glass, gold or glossy solid lit in a photo studio, spinning in), type3d (real extruded 3D letters dropping, flipping or flying in), shapes3d (a floating composition of glossy, chrome and glass 3D forms), three (a custom 3D scene the coder builds: objects, materials, lights, camera moves). Build the film around 3–5 DIFFERENT set pieces (name each scene's set piece in its setpiece field), staged in the film's own look: your backgrounds, colours, overlays and type around them. Kinetic-type scenes between them keep the rhythm. A set piece serves the concept; it is not the concept.
 - The last scene resolves on the brand: the logo mark (S.logo / S.logoPath / S.logoPoints), the name and the site, holding still and clean for the final 1.5 seconds.
 - On-screen text: short, punchy, in the brand's own voice, from the brief and the brand facts. Never invent numbers, clients, places or awards.
 - Fonts: display from ${DISPLAY_NAMES.join(', ')}; optional serif from ${SERIF_NAMES.join(', ')}.
@@ -132,6 +132,8 @@ export interface Direction {
   motion: string;
   sound: { bpm: number; key?: string; description: string };
   scenes: { id: string; title: string; beats: number; idea: string; onscreenText: string[]; setpiece?: string; transition: string }[];
+  /** Replicate --exact: a shot-for-shot copy (no brand ending unless the reference has one). */
+  exact?: boolean;
 }
 
 let techList: string | undefined;
@@ -238,10 +240,10 @@ ${lib}
 WRITE SCENE ${i + 1} of ${d.scenes.length}: "${s.id}" — ${s.title}
 - Length: ${s.beats} beats = ${(s.beats * B).toFixed(3)} s at ${bpm} BPM (one beat = ${B.toFixed(3)} s)
 - Idea: ${s.idea}
-- Set piece: ${s.setpiece && s.setpiece !== 'none' ? `S.set.${s.setpiece} (build the shot on it; see its options in the Stage API)` : 'none (a kinetic-type or graphic scene)'}
+- Set piece: ${s.setpiece === 'three' ? 'S.three: a custom real-3D scene you build (see S.three in the Stage API)' : s.setpiece && s.setpiece !== 'none' ? `S.set.${s.setpiece} (build the shot on it; see its options in the Stage API)` : 'none (a kinetic-type or graphic scene)'}
 - On-screen text (exactly these strings): ${JSON.stringify(s.onscreenText)}
 - Comes after: ${prev ? `"${prev.id}" — ${prev.idea}` : 'nothing: this is the first frame of the film, it must hook instantly'}
-- Leads into: ${next ? `"${next.id}" — ${next.idea} (transition: ${s.transition})` : 'nothing: this is the final scene; resolve on the logo, name and site and hold the last 1.5 s still'}
+- Leads into: ${next ? `"${next.id}" — ${next.idea} (transition: ${s.transition})` : d.exact ? "nothing: this is the final shot; end exactly as the reference does" : 'nothing: this is the final scene; resolve on the logo, name and site and hold the last 1.5 s still'}
 
 Return the draw body, the sfx body (accents that sit on top of the score; can be empty) and any hits.`;
 }

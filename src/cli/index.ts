@@ -43,6 +43,9 @@ runs through OpenRouter instead and needs OPENROUTER_API_KEY; --model, --code-mo
                                                  the same scenes written by several models, side by side, with cost and scores
   motion replicate <reference.mp4> --brand brand.json [--brief "..."] [--keep-colors] [same flags as invent]
                                                  watch a film you like and rebuild it, shot for shot, for the brand
+  motion replicate <reference.mp4> --exact [--model id --critic-model id] [-o dir]
+                                                 copy it as exactly as possible (its words, colours, timing and music);
+                                                 also writes video-compare.mp4 (reference | copy)
   motion brand    <url> [--logo mark.svg] [-o brand.json]
                                                  extract colours, fonts, facts and the logo mark
   motion plan     --brand brand.json --brief "..." [--seconds 20] [--genre g] [--effort low|medium|high] [-o plan.json]

@@ -25,7 +25,8 @@ export interface Reel {
 
 export async function launch(): Promise<Browser> {
   const executablePath = process.env.MOTION_CHROMIUM_PATH || undefined;
-  return chromium.launch({ executablePath, args: ['--autoplay-policy=no-user-gesture-required'] });
+  // SwiftShader gives headless Chromium WebGL 2 (for the 3D bundle) without a GPU
+  return chromium.launch({ executablePath, args: ['--autoplay-policy=no-user-gesture-required', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
 }
 
 /** Write the plan's HTML to a temp file and open it in headless Chromium, ready to render. */

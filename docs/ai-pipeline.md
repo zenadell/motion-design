@@ -157,6 +157,10 @@ The measurements below showed where Gemini falls short: scenes with real product
 
 The director names one per scene (`setpiece` in the direction) and builds the film around 3–5 different ones; the coder stages each in the film's own look (backgrounds, type and overlays around it, `bg: null` to composite). Every option can be animated per frame. `test/fixtures/setpieces.plan.json` is a showcase of all of them.
 
+### Real 3D (Three.js)
+
+`S.set.logo3d`, `S.set.type3d` and `S.set.shapes3d` are real 3D set pieces, and `S.three` lets a scene build its own 3D world. The brand mark and any text are extruded into bevelled solids and lit in a virtual photo studio (soft boxes, reflections). Materials: chrome, gold, glass, gloss, matte, metal, neon (with bloom) and clay. Three.js lives in a separate bundle (`dist/three.js`, about 800 KB) that is inlined only into reels whose code uses it. Headless Chromium renders it with SwiftShader (software WebGL 2, no GPU), which is slower: frames that draw 3D take two motion-blur samples instead of six, and the automated speed check allows them 250 ms.
+
 ### Setting the bar, client feedback and refining
 
 - `--bar-video a.mp4,b.mp4 --bar-code a.html,b.html` sets the quality bar. The director and the critics **watch** the reference films. The coder **studies their source code** as 9/10 craft to learn from, not to copy. Both sit at the start of the prompts so Gemini's implicit cache can reuse them.
@@ -194,7 +198,16 @@ motion replicate reference.mp4 --brand out/brand.json --brief "Our launch film" 
 
 1. The model watches the reference (with sound) and writes a shot-by-shot breakdown: timing, composition, motion and easing, type, colour, texture, camera, transitions and music.
 2. It adapts the breakdown to the brand. It keeps the structure, pacing, shot types and motion language, and swaps in the brand's copy (facts only), palette and logo.
-3. The invent pipeline rebuilds it. Every scene critique watches the **reference segment and the render side by side**.
+3. The invent pipeline rebuilds it. The coder sees the reference segment for every scene it writes or rewrites, and every scene critique watches the **reference segment and the render side by side**.
+4. The output folder also holds `video-compare.mp4`: the reference and the copy side by side.
+
+`--exact` copies the reference instead of adapting it: its own words, colours (the breakdown's palette becomes the theme), closest display font, shot timing (one scene per shot, cut to the reference's own shot times) and no added end card. The final video carries the reference's own soundtrack (`video-synth.mp4` keeps the synthesised one), and `--brand` is optional.
+
+```bash
+motion replicate clip.mp4 --exact --model deepseek/deepseek-v4.1-flash --critic-model google/gemini-3.8-flash -o out/copy
+```
+
+Models that cannot watch video (GPT, DeepSeek) are shown 8 evenly spaced still frames of every clip instead; the breakdown itself is written by the critic model, so give it one that watches video.
 
 ## Results so far (Jomiez, 24 s, Gemini 3.8 Flash for every role)
 

@@ -139,8 +139,26 @@ function layerOf(key: string, w = W, h = H): { canvas: HTMLCanvasElement; g: G }
   return { canvas: e[0], g: e[1] };
 }
 
+/** The optional 3D bundle (dist/three.js), created lazily with this reel's theme. */
+type Motion3D = { create(ctx: unknown): Record<string, (...a: unknown[]) => unknown> & { THREE: unknown } };
+let api3d: ReturnType<Motion3D['create']> | null = null;
+function three3d(c: Ctx) {
+  if (api3d) return api3d;
+  const M = (window as unknown as { Motion3D?: Motion3D }).Motion3D;
+  if (!M) throw new Error('3D is not loaded in this reel: S.three and S.set.logo3d / type3d / shapes3d need the 3D bundle (it is added automatically when the code mentions them)');
+  const T = c.theme, L = c.brand.logo;
+  api3d = M.create({
+    colors: { bg: T.bg, text: T.text, primary: T.primary, secondary: T.secondary, accent: T.accent, surface: T.surface, muted: T.muted, light: T.light, dark: T.dark },
+    font: (g: G, size: number, weight = 700, role: 'display' | 'mono' | 'serif' = 'display', italic = false) => font(g, size, weight, role, italic),
+    logo: { d: L.d, box: L.box, monogram: L.monogram },
+    W, H,
+  });
+  return api3d;
+}
+
 function baseStage(c: Ctx): StageBase {
   const T = c.theme, L = c.brand.logo;
+  const lazy3d = new Proxy({}, { get: (_t, k) => (three3d(c) as Record<string | symbol, unknown>)[k] });
   return {
     W, H, TAU,
     bpm: 60 / c.B,
@@ -180,8 +198,14 @@ function baseStage(c: Ctx): StageBase {
     title: (g: G, text: string, x: number, y: number, o: Parameters<typeof title>[6]) => title(ease, layerOf, g, text, x, y, o),
     bg: (g: G, o: Parameters<typeof background>[2]) => background(noise, g, o),
     fluid: (o: Parameters<typeof fluid>[1]) => fluid(layerOf, o),
-    // set pieces (setpieces.ts)
-    set: setPieces({ theme: T, logo: L, eases: ease, layerOf }),
+    // set pieces (setpieces.ts) and real-3D ones (three3d/, loaded on demand)
+    set: {
+      ...setPieces({ theme: T, logo: L, eases: ease, layerOf }),
+      logo3d: (g: G, t: number, o?: object) => three3d(c).logo3d(g, t, o),
+      type3d: (g: G, t: number, o?: object) => three3d(c).type3d(g, t, o),
+      shapes3d: (g: G, t: number, o?: object) => three3d(c).shapes3d(g, t, o),
+    },
+    three: lazy3d,
     // colour
     mix: (a: string, b: string, p: number) => mixHex(a, b, p),
     rgba: (hex: string, a: number) => rgba(hex, a),
@@ -356,6 +380,11 @@ Runs once at load; return an object of shared helpers (drawing functions, palett
 ${SETPIECE_DOCS}
 ${TOOLKIT_DOCS}
 ${PRESET_DOCS}
+
+## S.three: real 3D (Three.js) for your own scenes
+const v = S.three.view(key, (THREE, k) => { …build once…; return handles }, { bg, bloom, light: 'studio' | 'rim' | 'neon' | 'none', exposure, scale, fov = 30 }) builds a 3D scene ONCE per key (cached), then every frame you pose it from t and call v.render(g) (draws it over the frame; with bg: null it is transparent, so paint your 2D background first and 2D type after). v.handles is what setup returned; v.camera (PerspectiveCamera, default at [0, 0, 8] looking at the origin; ~4.3 units visible vertically), v.scene, v.THREE.
+In setup, k offers: k.logo({ material, color, side, sideColor, depth, bevel, size }) and k.text(str, { …same, weight, role, tracking }) → extruded meshes (height 1 = cap height), k.letters(str, opts) → a Group with one mesh per letter (child.userData.x = its resting x), k.shape('sphere' | 'torus' | 'cube' | 'capsule' | 'cone' | 'cylinder' | 'knot' | 'ring' | 'icosa', { size, material, color }), k.particles(n, { spread: [x, y, z], size, color, seed }), k.light('point' | 'spot' | 'dir', { color, intensity, at: [x, y, z] }), k.material(kind, color). Materials: 'chrome', 'gold', 'glass', 'gloss', 'matte', 'metal', 'neon' (glows with bloom), 'clay'. A studio environment gives reflections automatically.
+Rules: set EVERY animated property (position, rotation, scale, visible, material values, camera) from t on every frame, because frames render out of order. Never create objects outside setup. Keep to one or two views per frame.
 
 ## A (audio, for sfx and score)
 Instruments (times are absolute seconds, m = MIDI note number, v = volume, p = pan -1..1):

@@ -15,7 +15,8 @@ export function traceContours(mask: Uint8Array, w: number, h: number, minLen = 1
     for (let x = 0; x < w; x++) {
       if (seen[y * w + x] || !isEdge(x, y) || at(x - 1, y)) continue;
       const loop: Vec2[] = [];
-      let cx = x, cy = y, dir = 0, guard = 0;
+      // entered from the west, so the clockwise search starts at north-west and the trace runs clockwise
+      let cx = x, cy = y, dir = 3, guard = 0;
       do {
         loop.push([cx, cy]);
         seen[cy * w + cx] = 1;
