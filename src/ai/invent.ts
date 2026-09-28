@@ -120,6 +120,19 @@ const cleanScene = (r: Partial<SceneCode> | undefined, prev?: SceneCode): SceneC
   hits: Array.isArray(r?.hits) ? r!.hits! : prev?.hits ?? [],
 });
 
+/** What is missing from a direction for the pipeline to build it (empty = usable). */
+export function directionProblems(d: Partial<Direction> | undefined): string[] {
+  const out: string[] = [];
+  if (!d || typeof d !== 'object') return ['no direction'];
+  const scenes = Array.isArray(d.scenes) ? d.scenes : [];
+  if (scenes.length < 3) out.push(`${scenes.length} scenes (need 6–10)`);
+  const bad = scenes.filter(s => !s || typeof s.idea !== 'string' || !s.idea.trim() || !(Number(s.beats) > 0)).length;
+  if (bad) out.push(`${bad} scene(s) without an idea or beats`);
+  if (!d.look || typeof d.look !== 'object') out.push('no look');
+  if (!d.title) out.push('no title');
+  return out;
+}
+
 export async function invent(llm: LLM, o: InventOptions) {
   const log = o.log ?? (() => {});
   const codeLLM = o.codeLLM ?? llm, criticLLM = o.criticLLM ?? llm;
@@ -161,6 +174,13 @@ export async function invent(llm: LLM, o: InventOptions) {
     const chosen = concepts[pick.ranking?.find(k => concepts[k]) ?? 0] ?? concepts[0];
     log(`  picked "${chosen.title}": ${pick.reasons.slice(0, 200)}`);
     d = await ask<Direction>(llm, 'direct', directorSystem(), [...barParts(3), developUser(base, chosen)], directionSchema(), 'high');
+    // some models return a thin direction (no scenes, missing fields); ask again with the problem named
+    for (let r = 1; r <= 2 && directionProblems(d).length; r++) {
+      const why = directionProblems(d);
+      log(`  direction incomplete (${why.join('; ')}) → ask again ${r}`);
+      d = await ask<Direction>(llm, `direct · retry ${r}`, directorSystem(), [...barParts(3), developUser(base, chosen), `YOUR PREVIOUS ANSWER WAS INCOMPLETE: ${why.join('; ')}. Return the complete direction: every field, and 6–10 fully described scenes whose beats add up to the target.`], directionSchema(), 'high');
+    }
+    if (directionProblems(d).length) throw new Error(`the director returned an incomplete direction: ${directionProblems(d).join('; ')}`);
   }
   const bpm = Math.min(140, Math.max(90, o.bpm ?? d.sound?.bpm ?? 120));
   const targetBeats = Math.round(((seconds * bpm) / 60) * 2) / 2;

@@ -131,3 +131,13 @@ describe('code bodies', () => {
     expect(f(4, Math)).toBe(8);
   });
 });
+
+import { directionProblems } from '../src/ai/invent';
+describe('direction check', () => {
+  it('flags a direction the pipeline cannot build', () => {
+    expect(directionProblems({ title: 'T', look: {} as never, scenes: [] })).toEqual(['0 scenes (need 6–10)']);
+    const scene = { id: 'a', title: 'A', beats: 4, idea: 'x', onscreenText: [], transition: 'cut' };
+    expect(directionProblems({ title: 'T', look: {} as never, scenes: [scene, scene, scene] })).toEqual([]);
+    expect(directionProblems({ title: 'T', look: {} as never, scenes: [scene, scene, { ...scene, idea: '' }] })).toEqual(['1 scene(s) without an idea or beats']);
+  });
+});
