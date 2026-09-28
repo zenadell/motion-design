@@ -158,7 +158,10 @@ export async function invent(llm: LLM, o: InventOptions) {
     usage.push(r.usage);
     audit.push({ step: label, model: m.model, at: new Date().toISOString(), reply: r.text });
     writeFileSync(f('transcript.json'), JSON.stringify(audit, null, 2));
-    return parseJson<T>(r.text);
+    const v = parseJson<unknown>(r.text);
+    // some models wrap the requested object in a one-element array
+    if (Array.isArray(v) && v.length === 1 && v[0] && typeof v[0] === 'object' && (schema as { type?: string }).type === 'object') return v[0] as T;
+    return v as T;
   };
 
   // ── 1. direction ──────────────────────────────────────────────────────────
