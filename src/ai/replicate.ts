@@ -150,6 +150,8 @@ export interface ReplicateOptions extends Omit<InventOptions, 'direction' | 'ref
   planOnly?: boolean;
   /** Rebuild from the breakdown.json and direction.json already in outDir (from a --plan-only run). */
   reusePlan?: boolean;
+  /** Continue a run in outDir that stopped: reuse its plan and the scenes in its partial.json. */
+  resumePartial?: boolean;
 }
 
 /** In exact mode the palette comes from the reference: darkest → bg, lightest → text, the most saturated → primary. */
@@ -218,7 +220,10 @@ export async function replicate(llm: LLM, o: ReplicateOptions) {
   const dur = await videoDuration(o.videoFile);
   mkdirSync(o.outDir, { recursive: true });
   // a plan saved by an earlier run (--plan-only) skips the breakdown and direction calls
-  const saved = o.reusePlan ? loadPlan(o.outDir) : undefined;
+  const saved = o.reusePlan || o.resumePartial ? loadPlan(o.outDir) : undefined;
+  const partialFile = join(o.outDir, 'partial.json');
+  const partial = o.resumePartial && existsSync(partialFile) ? (JSON.parse(readFileSync(partialFile, 'utf8')) as InventOptions['partial']) : undefined;
+  if (o.resumePartial && !partial) throw new Error(`nothing to resume: ${partialFile} does not exist`);
   const usageExtra: Usage[] = [];
   let bd: Breakdown;
   if (saved) {
@@ -280,7 +285,7 @@ export async function replicate(llm: LLM, o: ReplicateOptions) {
   // in exact mode the reference's own words are allowed on screen
   const words = shots.flatMap(s => s.text ?? []).join('\n');
   const res = await invent(llm, {
-    ...o, kit, brief: o.exact ? `${o.brief}\n${words}` : o.brief, direction: d, bpm, seconds: Math.round(dur * 2) / 2,
+    ...o, kit, brief: o.exact ? `${o.brief}\n${words}` : o.brief, direction: d, bpm, seconds: Math.round(dur * 2) / 2, partial,
     reference: { note: JSON.stringify({ summary: bd.summary, style: bd.style, typography: bd.typography, motion: bd.motion, texture: bd.texture, sound: bd.sound }), clips: parts, exact: o.exact, ...(o.exact ? { source: { file: o.videoFile, windows } } : {}) },
   });
   if (res.video) {

@@ -47,7 +47,8 @@ runs through OpenRouter instead and needs OPENROUTER_API_KEY; --model, --code-mo
                                                  copy it as exactly as possible (its words, colours, timing and music);
                                                  also writes video-compare.mp4 (reference | copy);
                                                  --plan-only stops after breakdown.json and direction.json,
-                                                 --reuse-plan rebuilds from them
+                                                 --reuse-plan rebuilds from them, --resume-partial continues a run
+                                                 that stopped (keeps its finished scenes)
   motion brand    <url> [--logo mark.svg] [-o brand.json]
                                                  extract colours, fonts, facts and the logo mark
   motion plan     --brand brand.json --brief "..." [--seconds 20] [--genre g] [--effort low|medium|high] [-o plan.json]
