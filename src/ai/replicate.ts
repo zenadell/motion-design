@@ -168,7 +168,7 @@ function paletteRoles(hexes: string[]) {
 }
 
 /** The critic watches the reference and writes the frame log and the shot list. */
-async function breakdown(critic: LLM, file: string, dur: number, outDir: string): Promise<{ bd: Breakdown; usage: Usage }> {
+async function breakdown(critic: LLM, file: string, dur: number, outDir: string, lessons = ''): Promise<{ bd: Breakdown; usage: Usage }> {
   const { full } = await referenceClips(file, []);
   // the clip for motion and sound, and sharp timed stills for words and layout
   const fps = Math.min(4, Math.max(0.5, Math.floor((72 / Math.max(1, dur)) * 2) / 2));
@@ -182,7 +182,7 @@ You also get sharp still frames every ${(1 / fps).toFixed(2)} s, each labelled w
 
 # Craft handbook (vocabulary)
 ${craft}`,
-    turns: [user(video(full, 12), text(`${stills.length} STILL FRAMES (${fps} per second)`), ...stillParts, text('Break this film down: the frame log first, then the shots.'))],
+    turns: [user(video(full, 12), text(`${stills.length} STILL FRAMES (${fps} per second)`), ...stillParts, text(`Break this film down: the frame log first, then the shots.${lessons}`))],
   });
   try {
     return { bd: parseJson<Breakdown>(bdRes.text), usage: bdRes.usage };
@@ -212,7 +212,7 @@ export async function replicate(llm: LLM, o: ReplicateOptions) {
     log(`1/3 reusing the saved breakdown (${join(o.outDir, 'breakdown.json')})`);
   } else {
     log(`1/3 watching the reference (${dur.toFixed(1)} s)`);
-    const r = await breakdown(critic, o.videoFile, dur, o.outDir);
+    const r = await breakdown(critic, o.videoFile, dur, o.outDir, o.lessons?.block('breakdown', { mode: o.exact ? 'exact' : 'invent', text: 'breakdown frame log shots words sizes timing' }) ?? '');
     bd = r.bd;
     usageExtra.push(r.usage);
     writeFileSync(join(o.outDir, 'breakdown.json'), JSON.stringify(bd, null, 2));
@@ -239,7 +239,7 @@ export async function replicate(llm: LLM, o: ReplicateOptions) {
       turns: [user(
         text(`REFERENCE BREAKDOWN\n${JSON.stringify(bd, null, 1)}`),
         o.exact ? text(`PALETTE ROLES FOR THIS COPY (S.colors)\n${JSON.stringify(kit.brand.colors)}`) : text(`BRAND\n${JSON.stringify({ ...o.kit.brand, logo: o.kit.brand.logo ? '(vector mark)' : '(monogram)' })}\nFACTS\n${JSON.stringify(o.kit.facts)}\nBRIEF\n${o.brief}`),
-        text(`Write the direction (music: ${bpm} BPM).`),
+        text(`Write the direction (music: ${bpm} BPM).${o.lessons?.block('director', { mode: o.exact ? 'exact' : 'invent', text: `${bd.summary} ${bd.style}` }) ?? ''}`),
       )],
     });
     const raw = parseJson<Direction | Direction[]>(dirRes.text);

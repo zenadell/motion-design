@@ -9,6 +9,7 @@ import { DISPLAY_NAMES, SERIF_NAMES } from '../plan/fonts';
 import type { Plan, PlanInput } from '../plan/schema';
 import { validatePlan } from '../plan/validate';
 import { factCorpus, type BrandKit } from './brand-kit';
+import { learn, newEvidence, sceneEvidence, type Lessons, type Role } from './lessons';
 import { beatReport, motionReport, type MotionReport } from './metrics';
 import { parseJson, summarizeUsage, text, user, video, type Effort, type LLM, type Part, type Usage } from './llm';
 import {
@@ -64,6 +65,12 @@ export interface InventOptions {
   bar?: { videos: Buffer[]; code?: string };
   /** Extra context for every scene prompt and critique (replicate mode: the reference breakdown). */
   reference?: { note: string; clips?: Buffer[]; exact?: boolean };
+  /** The platform's memory of past mistakes: relevant lessons go into every prompt, and the run is reviewed afterwards. */
+  lessons?: Lessons;
+  /** Skip the post-run review (lessons are still applied). */
+  noLearn?: boolean;
+  /** The model that reviews the run and writes lessons (default: the critic). */
+  learnLLM?: LLM;
 }
 
 export interface SceneCode {
@@ -170,7 +177,8 @@ export async function invent(llm: LLM, o: InventOptions) {
   if (o.direction) d = o.direction;
   else {
     log('1/6 direction: concept tournament');
-    const base = directorUser(o.brief, o.kit, Math.round((seconds * (o.bpm ?? 120)) / 60), seconds, o.bpm) + feedbackNote;
+    const base = directorUser(o.brief, o.kit, Math.round((seconds * (o.bpm ?? 120)) / 60), seconds, o.bpm) + feedbackNote
+      + (o.lessons?.block('director', { mode: o.reference?.exact ? 'exact' : 'invent', text: o.brief }) ?? '');
     const { concepts } = await ask<{ concepts: Concept[] }>(llm, 'concepts', directorSystem(), [...barParts(3), conceptsUser(base, 3)], conceptsSchema(), 'high');
     concepts.forEach((c, k) => log(`  ${k + 1}. "${c.title}" — ${c.idea.slice(0, 160)}`));
     const pick = await ask<{ ranking: number[]; reasons: string }>(criticLLM, 'pick concept', pickSystem(), [...barParts(2), `BRIEF AND BRAND\n${base}`, `CONCEPTS\n${JSON.stringify(concepts.map((c, k) => ({ index: k, ...c })), null, 1)}`], pickSchema(), 'medium');
@@ -200,6 +208,12 @@ export async function invent(llm: LLM, o: InventOptions) {
   log(`  "${d.title}" — ${d.concept}`);
   log(`  ${d.scenes.length} scenes · ${bpm} BPM · ${d.look.display}${d.look.serif ? ` + ${d.look.serif}` : ''} · ${d.vibe.join(', ')}`);
   const exact = !!o.reference?.exact;
+  const ev = newEvidence(exact ? 'exact' : o.reference ? 'adapt' : 'invent', { code: codeLLM.model, critic: criticLLM.model, direction: o.direction ? undefined : llm.model }, target);
+  ev.title = d.title;
+  const lessonMode = exact ? 'exact' : 'invent';
+  /** The lessons one role should see for this task (empty without a store). */
+  const L = (role: Role, task: string) => o.lessons?.block(role, { mode: lessonMode, text: task }) ?? '';
+  const sceneTask = (i: number) => `${d.scenes[i].title} ${d.scenes[i].idea} ${d.scenes[i].setpiece ?? ''}`;
   const refNote = (o.reference ? `\n\nREFERENCE FILM BREAKDOWN (match its craft, pacing and style)\n${o.reference.note}` : '') + feedbackNote
     + (exact ? `\n\nEXACT COPY MODE: the reference is the specification. Reproduce it faithfully: the same layout, element sizes (even small ones), colours, words, timing and motion, including its still moments and white space. Where the craft handbook's style rules (hero type sizes, constant motion, filling the frame) disagree with the reference, the reference wins. Critics: score each dimension by how faithfully the render reproduces the reference segment; any difference from the reference is a flaw, even one that looks "better".` : '');
 
@@ -231,13 +245,33 @@ export async function invent(llm: LLM, o: InventOptions) {
     sections: d.scenes.map((s, i) => ({ technique: `scene:${s.id}`, beats: s.beats, ...(i < d.scenes.length - 1 && s.transition !== 'cut' ? { transition: s.transition as never } : {}) })),
   });
 
+  /** Review the run and store what it teaches (never fails the run). */
+  const review = async (failure?: string) => {
+    const evidence = failure ? { ...ev, notes: [...(ev.notes ?? []), `the run failed: ${failure}`] } : ev;
+    writeFileSync(f('evidence.json'), JSON.stringify(evidence, null, 2));
+    if (!o.lessons || o.noLearn) return;
+    const m = o.learnLLM ?? criticLLM;
+    try {
+      const r = await learn(m, o.lessons, evidence, dir);
+      usage.push(r.usage);
+      audit.push({ step: 'learn', model: m.model, at: new Date().toISOString(), reply: r.reply });
+      writeFileSync(f('transcript.json'), JSON.stringify(audit, null, 2));
+      log(`  learned: ${r.added.length} new lesson(s)${r.added.length ? ` (${r.added.join(', ')})` : ''}, ${r.reinforced.length} reinforced, ${r.repeated.length} repeated despite being shown → ${o.lessons.file}`);
+    } catch (e) {
+      log(`  could not review the run for lessons: ${String((e as Error).message ?? e).slice(0, 200)}`);
+    }
+  };
+
   const browser = await launch();
   try {
-    return await body();
+    const res = await body();
+    await review();
+    return res;
   } catch (e) {
     // keep everything made so far (direction, code, scores) so a run can be resumed or inspected
     writeFileSync(f('partial.json'), JSON.stringify({ error: String((e as Error).message ?? e), direction: d, lib, score, scenes, usage: summarizeUsage(usage) }, null, 2));
     log(`  saved partial results to ${f('partial.json')}`);
+    await review(String((e as Error).message ?? e).slice(0, 400));
     throw e;
   } finally {
     await browser.close();
@@ -291,12 +325,16 @@ export async function invent(llm: LLM, o: InventOptions) {
       log(`2/6 refining ${o.resume.only.join(', ')}; keeping everything else`);
     } else {
       log('2/6 code: shared lib + score');
-      ({ lib, score } = await ask<{ lib: string; score: string }>(codeLLM, 'code lib', coder(), [libUser(d, o.kit) + refNote], libSchema(), 'high'));
+      ({ lib, score } = await ask<{ lib: string; score: string }>(codeLLM, 'code lib', coder(), [libUser(d, o.kit) + refNote + L('coder', `${d.concept} shared lib score sound ${JSON.stringify(d.look)}`)], libSchema(), 'high'));
     }
     for (let r = 1; r <= (o.resume ? 0 : fixRounds); r++) {
       const res = await run(scenePlan(0, probe, true), []);
       const libProblems = res.problems.filter(p => /^custom\.(lib|score)|^lib |^score |soundtrack/.test(p));
-      if (!libProblems.length) break;
+      if (!libProblems.length) {
+        ev.lib.tests.forEach(t => (t.resolved = true));
+        break;
+      }
+      ev.lib.tests.push({ tag: `fix ${r}`, problems: libProblems.slice(0, 4).map(p => p.slice(0, 240)), resolved: false });
       log(`  lib/score: ${libProblems.length} problem(s) → fix ${r}`);
       ({ lib, score } = await ask<{ lib: string; score: string }>(codeLLM, `fix lib · ${r}`, coder(), [fixUser('the shared lib and the score', { lib, score }, libProblems)], libSchema(), 'medium'));
     }
@@ -304,9 +342,16 @@ export async function invent(llm: LLM, o: InventOptions) {
     // ── per-scene: write → test/fix → watch → score, best of N, then rewrite rounds ──
     const lastProblems: Record<string, string[]> = {};
     const testFix = async (i: number, c: SceneCode, tag: string): Promise<SceneCode | null> => {
+      const se = sceneEvidence(ev, d.scenes[i].id, d.scenes[i].idea);
+      let failing: { tag: string; problems: string[]; resolved: boolean } | undefined;
       for (let r = 0; r <= fixRounds; r++) {
         const res = await run(scenePlan(i, c), [c.draw]);
-        if (!res.problems.length) return c;
+        if (!res.problems.length) {
+          if (failing) failing.resolved = true;
+          return c;
+        }
+        if (!failing) se.tests.push((failing = { tag, problems: [], resolved: false }));
+        failing.problems = [...new Set([...failing.problems, ...res.problems.map(p => p.slice(0, 240))])].slice(0, 6);
         if (r === fixRounds) {
           lastProblems[d.scenes[i].id] = res.problems;
           log(`    ${d.scenes[i].id} ${tag}: still ${res.problems.length} problem(s), discarded: ${res.problems.slice(0, 2).join(' | ').slice(0, 240)}`);
@@ -314,7 +359,7 @@ export async function invent(llm: LLM, o: InventOptions) {
         }
         const fixed = await ask<SceneCode>(codeLLM, `fix scene ${d.scenes[i].id} ${tag} · ${r + 1}`, coder(), [
           `SCENE "${d.scenes[i].id}": ${d.scenes[i].idea}\nOn-screen text: ${JSON.stringify(d.scenes[i].onscreenText)}\nLength: ${d.scenes[i].beats} beats at ${bpm} BPM.\n\nSHARED LIB (S.lib)\n\`\`\`js\n${lib}\n\`\`\``,
-          fixUser(`scene "${d.scenes[i].id}"`, { draw: c.draw, sfx: c.sfx, hits: JSON.stringify(c.hits) }, res.problems),
+          fixUser(`scene "${d.scenes[i].id}"`, { draw: c.draw, sfx: c.sfx, hits: JSON.stringify(c.hits) }, res.problems) + L('coder', `code error exception crash guard ${res.problems.join(' ')}`),
         ], sceneSchema(), 'medium');
         c = cleanScene(fixed, c);
       }
@@ -352,14 +397,16 @@ export async function invent(llm: LLM, o: InventOptions) {
       const refClip = o.reference?.clips?.[i];
       const c = await ask<SceneCritique>(criticLLM, `critique ${d.scenes[i].id} ${tag}`, sceneCriticSystem(), [
         ...barParts(3),
-        sceneCriticUser(d, i) + refNote,
+        sceneCriticUser(d, i) + refNote + L('critic', sceneTask(i)),
         ...(refClip ? [text('REFERENCE SEGMENT (the target to match):'), video(refClip, 12)] : []),
         text('RENDERED SCENE:'), video(cm.clip, 12),
         text(measured(cm.m, cm.beat)),
       ], sceneCriticSchema(), 'medium');
       // measured problems always reach the rewrite, even if the critic did not list them (not for an exact copy: the reference decides)
       c.fixes = [...(Array.isArray(c.fixes) ? c.fixes : []), ...(exact ? [] : cm.m.flags.map(f => `(measured) ${f}`))];
-      return { c, s: critiqueScore(c), clip: cm.clip };
+      const s = critiqueScore(c);
+      sceneEvidence(ev, d.scenes[i].id, d.scenes[i].idea).versions.push({ step: tag, score: s, scores: c.scores, observed: String(c.observed ?? '').slice(0, 600), fixes: c.fixes.slice(0, 4).map(x => String(x).slice(0, 300)) });
+      return { c, s, clip: cm.clip };
     };
 
     /**
@@ -400,7 +447,7 @@ export async function invent(llm: LLM, o: InventOptions) {
             return { code: scenes[i], score: cr.s, critique: cr.c, clip: cr.clip };
           })()]
         : await Promise.all(Array.from({ length: o.candidates ?? 2 }, async (_, k) => {
-        const r = await ask<SceneCode>(codeLLM, `code ${s.id} #${k + 1}`, coder(), [sceneUser(d, lib, i, bpm) + refNote + (k ? `\n\n(Candidate ${k + 1}: take a clearly different creative approach to the same brief.)` : ''), ...refTarget(i)], sceneSchema(), 'high');
+        const r = await ask<SceneCode>(codeLLM, `code ${s.id} #${k + 1}`, coder(), [sceneUser(d, lib, i, bpm) + refNote + L('coder', sceneTask(i)) + (k ?`\n\n(Candidate ${k + 1}: take a clearly different creative approach to the same brief.)` : ''), ...refTarget(i)], sceneSchema(), 'high');
         const ok = await testFix(i, cleanScene(r), `#${k + 1}`);
         if (!ok) return null;
         const cr = await critique(i, await clipOf(i, scenePlan(i, ok)), `#${k + 1}`);
@@ -411,7 +458,7 @@ export async function invent(llm: LLM, o: InventOptions) {
       // every candidate failed its tests: write fresh ones (a different, simpler approach) before giving up on the film
       for (let k = 1; k <= 2 && !good.length; k++) {
         log(`  ${s.id}: no working version yet → fresh attempt ${k}`);
-        const r = await ask<SceneCode>(codeLLM, `code ${s.id} retry ${k}`, coder(), [sceneUser(d, lib, i, bpm) + refNote + `\n\n(Earlier versions of this scene kept failing the engine's tests: ${(lastProblems[s.id] ?? []).slice(0, 4).join(' | ') || 'errors'}. Write it again from scratch, robustly: guard every value that can go negative or undefined, clamp times, keep it within the frame budget.)`], sceneSchema(), 'high');
+        const r = await ask<SceneCode>(codeLLM, `code ${s.id} retry ${k}`, coder(), [sceneUser(d, lib, i, bpm) + refNote + L('coder', `${sceneTask(i)} code error guard`) + `\n\n(Earlier versions of this scene kept failing the engine's tests: ${(lastProblems[s.id] ?? []).slice(0, 4).join(' | ') || 'errors'}. Write it again from scratch, robustly: guard every value that can go negative or undefined, clamp times, keep it within the frame budget.)`], sceneSchema(), 'high');
         const ok = await testFix(i, cleanScene(r), `retry${k}`);
         if (!ok) continue;
         const cr = await critique(i, await clipOf(i, scenePlan(i, ok)), `retry${k}`);
@@ -423,9 +470,10 @@ export async function invent(llm: LLM, o: InventOptions) {
       // the rubric score only orders the field; the head-to-head decides between the top two
       if (good.length > 1 && (await better(i, cur, good[1], 'cands'))) cur = good[1];
       log(`  ${s.id}: candidates ${good.map(g => g.score).join(' / ')} → kept ${cur.score}`);
+      for (const v of sceneEvidence(ev, s.id, s.idea).versions) if (v.kept === undefined) v.kept = v.score === cur.score;
       for (let r = 1; r <= (o.rounds ?? 2) && cur.score < target && !overBudget(); r++) {
         const rw = await ask<SceneCode>(codeLLM, `rewrite ${s.id} · ${r}`, coder(), [
-          rewriteUser(d, lib, i, bpm, cur.code, cur.critique, cur.score) + refNote,
+          rewriteUser(d, lib, i, bpm, cur.code, cur.critique, cur.score) + refNote + L('coder', `${sceneTask(i)} ${cur.critique.fixes.join(' ')}`),
           ...refTarget(i),
           text('THE CLIP THE REVIEW IS ABOUT (your current version):'), video(cur.clip, 12),
         ], sceneSchema(), 'high');
@@ -435,6 +483,8 @@ export async function invent(llm: LLM, o: InventOptions) {
         history[s.id].push({ step: `rewrite ${r}`, score: cr.s });
         const win = await better(i, cur, { score: cr.s, clip: cr.clip }, `r${r}`);
         log(`  ${s.id}: rewrite ${r} → ${cr.s}${win ? ' (wins head-to-head, kept)' : ` (does not beat ${cur.score} head-to-head, discarded)`}`);
+        const rv = sceneEvidence(ev, s.id, s.idea).versions.at(-1);
+        if (rv) rv.kept = win;
         if (win) cur = { code: ok, score: cr.s, critique: cr.c, clip: cr.clip };
       }
       best[i] = cur;
@@ -473,10 +523,11 @@ export async function invent(llm: LLM, o: InventOptions) {
       writeFileSync(f(`review-${r}.mp4`), filmClip);
       const fc = await ask<FilmCritique>(criticLLM, `film review ${r}`, filmCriticSystem(), [
         ...barParts(3),
-        `DIRECTION\n${JSON.stringify(d, null, 1)}${refNote}`,
+        `DIRECTION\n${JSON.stringify(d, null, 1)}${refNote}${L('critic', `${d.concept} film rhythm sound`)}`,
         text('THE FILM:'), video(filmClip, 8), 'Review it.',
       ], filmCriticSchema(), 'medium');
       films.push(fc);
+      ev.film.push({ score: fc.score, summary: String(fc.summary ?? '').slice(0, 600), scenes: (fc.scenes ?? []).map(x => ({ id: x.id, score: x.score, fix: String(x.fix ?? '').slice(0, 300) })) });
       writeFileSync(f(`review-${r}.json`), JSON.stringify(fc, null, 2));
       log(`  ${fc.score}/10 · ${fc.summary}`);
       const weak = (fc.scenes ?? []).filter(x => x.score < 8).sort((a, b) => a.score - b.score).slice(0, 3);
@@ -488,7 +539,7 @@ export async function invent(llm: LLM, o: InventOptions) {
         const cur = best[i];
         const crit: SceneCritique = { ...cur.critique, fixes: [`(from the whole-film review) ${w.fix}`, ...cur.critique.fixes].slice(0, 4) };
         const rw = await ask<SceneCode>(codeLLM, `film fix ${w.id} · ${r}`, coder(), [
-          rewriteUser(d, lib, i, bpm, cur.code, crit, cur.score) + refNote,
+          rewriteUser(d, lib, i, bpm, cur.code, crit, cur.score) + refNote + L('coder', `${sceneTask(i)} ${w.fix}`),
           text('THE CLIP THE REVIEW IS ABOUT:'), video(cur.clip, 12),
         ], sceneSchema(), 'high');
         const ok = await testFix(i, cleanScene(rw, cur.code), `film${r}`);
@@ -497,6 +548,8 @@ export async function invent(llm: LLM, o: InventOptions) {
         history[w.id].push({ step: `film fix ${r}`, score: cr.s });
         const win = await better(i, cur, { score: cr.s, clip: cr.clip }, `film${r}`);
         log(`  ${w.id}: film fix → ${cr.s}${win ? ' (wins head-to-head, kept)' : ' (does not win head-to-head, discarded)'}`);
+        const fv = sceneEvidence(ev, w.id, d.scenes[i].idea).versions.at(-1);
+        if (fv) fv.kept = win;
         if (win) { best[i] = { code: ok, score: cr.s, critique: cr.c, clip: cr.clip }; scenes[i] = ok; }
       });
       plan = await whole();

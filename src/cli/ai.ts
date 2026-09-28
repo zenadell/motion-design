@@ -9,6 +9,7 @@ import { bakeoff } from './bakeoff';
 import { summarizeUsage, type LLM, type Usage } from '../ai/llm';
 import { loadBar } from '../ai/bar';
 import { invent } from '../ai/invent';
+import { defaultLessonsPath, evidenceFromRun, learn, Lessons, weight } from '../ai/lessons';
 import { replicate } from '../ai/replicate';
 import { make } from '../ai/pipeline';
 import { Planner } from '../ai/planner';
@@ -53,6 +54,9 @@ function readBrief(flags: Flags): string {
   const b = str(flags.brief) ?? '';
   return b.startsWith('@') ? readFileSync(b.slice(1), 'utf8') : b;
 }
+
+/** The lessons store for a run (none with --no-lessons). */
+const lessonsOf = (flags: Flags) => (flags['no-lessons'] ? undefined : new Lessons(str(flags.lessons) ?? defaultLessonsPath()));
 
 export function printUsage(list: Usage[]) {
   const u = summarizeUsage(list);
@@ -164,7 +168,7 @@ export async function runAi(cmd: string, pos: string[], flags: Flags): Promise<b
         kit, brief: readBrief(flags), seconds: num(flags.seconds), bpm: num(flags.bpm),
         candidates: num(flags.candidates), rounds: num(flags.rounds), filmRounds: flags['no-qa'] ? 0 : num(flags['film-rounds']),
         budget: num(flags.budget), target: num(flags.target), render: !flags['no-render'], workers: num(flags.workers) ?? 3, outDir: dir, log,
-        codeLLM: sub('code-model'), criticLLM: sub('critic-model'),
+        codeLLM: sub('code-model'), criticLLM: sub('critic-model'), lessons: lessonsOf(flags), noLearn: !!flags['no-learn'],
       });
       printUsage(res.usage);
       log(`  scene scores: ${res.scores.join(' · ')}${res.films.length ? ` · film ${res.films.map(f => f.score).join(' → ')}/10` : ''}`);
@@ -192,7 +196,7 @@ export async function runAi(cmd: string, pos: string[], flags: Flags): Promise<b
         bar, feedback: str(flags.feedback)?.startsWith('@') ? readFileSync(str(flags.feedback)!.slice(1), 'utf8') : str(flags.feedback),
         candidates: num(flags.candidates) ?? 1, rounds: num(flags.rounds) ?? 3, filmRounds: num(flags['film-rounds']) ?? 0, budget: num(flags.budget), target: num(flags.target),
         render: !flags['no-render'], workers: num(flags.workers) ?? 3, outDir: dir, log,
-        codeLLM: roleModel(flags, 'code-model'), criticLLM: roleModel(flags, 'critic-model'),
+        codeLLM: roleModel(flags, 'code-model'), criticLLM: roleModel(flags, 'critic-model'), lessons: lessonsOf(flags), noLearn: !!flags['no-learn'],
       });
       mkdirSync(dir, { recursive: true });
       writeFileSync(join(dir, 'brand.json'), readFileSync(join(src, 'brand.json')));
@@ -235,7 +239,7 @@ export async function runAi(cmd: string, pos: string[], flags: Flags): Promise<b
         videoFile: pos[0], kit, brief: readBrief(flags), keepColors: !!flags['keep-colors'], exact, planOnly: !!flags['plan-only'], reusePlan: !!flags['reuse-plan'],
         candidates: num(flags.candidates), rounds: num(flags.rounds), filmRounds: flags['no-qa'] ? 0 : num(flags['film-rounds']),
         budget: num(flags.budget), target: num(flags.target), render: !flags['no-render'], workers: num(flags.workers) ?? 3, outDir: dir, log,
-        codeLLM: sub('code-model'), criticLLM: sub('critic-model'),
+        codeLLM: sub('code-model'), criticLLM: sub('critic-model'), lessons: lessonsOf(flags), noLearn: !!flags['no-learn'],
       });
       if (!('scores' in res)) {
         printUsage(res.usageExtra);
@@ -245,6 +249,39 @@ export async function runAi(cmd: string, pos: string[], flags: Flags): Promise<b
       printUsage([...res.usageExtra, ...res.usage]);
       log(`  scene scores: ${res.scores.join(' · ')}${res.films.length ? ` · film ${res.films.map(f => f.score).join(' → ')}/10` : ''}`);
       console.log(`✓ ${res.video ?? join(dir, 'plan.json')} — "${res.direction.title}"`);
+      return true;
+    }
+    case 'lessons': {
+      const store = new Lessons(str(flags.lessons) ?? defaultLessonsPath());
+      const drop = (str(flags.remove) ?? '').split(',').map(x => x.trim()).filter(Boolean);
+      if (drop.length) {
+        const before = store.lessons.length;
+        store.lessons = store.lessons.filter(l => !drop.includes(l.id));
+        store.save();
+        log(`  removed ${before - store.lessons.length} lesson(s)`);
+      }
+      const list = [...store.lessons].sort((a, b) => weight(b) - weight(a));
+      console.log(`${list.length} lesson(s) in ${store.file}\n`);
+      for (const l of list) console.log(`${l.id}  [${l.roles.join(', ')}${l.mode !== 'any' ? ` · ${l.mode} only` : ''}]  seen ${l.seen}× · shown ${l.shown}× · repeated ${l.repeated}×\n  ${l.rule}\n`);
+      return true;
+    }
+    case 'learn': {
+      if (!pos.length) throw new Error('missing <run-dir> (an invent, refine or replicate output folder)');
+      const store = new Lessons(str(flags.lessons) ?? defaultLessonsPath());
+      const m = roleModel(flags, 'critic-model') ?? gemini(flags);
+      const usage: Usage[] = [];
+      for (const dir of pos) {
+        const ev = evidenceFromRun(dir);
+        if (!ev.scenes.some(s => s.versions.length || s.tests.length)) {
+          log(`  ${dir}: no critiques or test results found, skipped`);
+          continue;
+        }
+        const r = await learn(m, store, ev, dir);
+        usage.push(r.usage);
+        log(`  ${dir}: ${r.added.length} new lesson(s)${r.added.length ? ` (${r.added.join(', ')})` : ''}, ${r.reinforced.length} reinforced`);
+      }
+      printUsage(usage);
+      console.log(`✓ ${store.lessons.length} lesson(s) in ${store.file} (motion lessons to read them)`);
       return true;
     }
     case 'make': {

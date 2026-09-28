@@ -196,7 +196,7 @@ Behind an HTTPS proxy (some cloud sandboxes), Node's `fetch` ignores `HTTPS_PROX
 motion replicate reference.mp4 --brand out/brand.json --brief "Our launch film" [--keep-colors] -o out/replica
 ```
 
-1. The model watches the reference (with sound) and writes a shot-by-shot breakdown: timing, composition, motion and easing, type, colour, texture, camera, transitions and music.
+1. The model watches the reference (with sound) and writes a shot-by-shot breakdown: timing, composition, motion and easing, type, colour, texture, camera, transitions and music. With the clip it also gets sharp stills (up to 4 per second, ~72 in all, each labelled with its time). It writes a **frame log** first, one line per still with the exact words, sizes, positions and colours, and derives the shots from that log. A compressed clip alone loses small words: without the stills, a Pinterest promo's "lacking ideas for your next edit … meet" came back as "lacking ideas for … edit … !".
 2. It adapts the breakdown to the brand. It keeps the structure, pacing, shot types and motion language, and swaps in the brand's copy (facts only), palette and logo.
 3. The invent pipeline rebuilds it. The coder sees the reference segment for every scene it writes or rewrites, and every scene critique watches the **reference segment and the render side by side**.
 4. The output folder also holds `video-compare.mp4`: the reference and the copy side by side.
@@ -207,7 +207,30 @@ motion replicate reference.mp4 --brand out/brand.json --brief "Our launch film" 
 motion replicate clip.mp4 --exact --model deepseek/deepseek-v4.1-flash --critic-model google/gemini-3.8-flash -o out/copy
 ```
 
+In exact mode each scene's idea ends with its shot's slice of the frame log, as ground truth for the coder and the critics.
+
+Check the plan before paying for the rebuild: `--plan-only` stops after `breakdown.json` and `direction.json` (about $0.12 for a 16-s clip), and `--reuse-plan` then rebuilds from those files. You can also edit them first.
+
 Models that cannot watch video (GPT, DeepSeek) are shown 8 evenly spaced still frames of every clip instead; the breakdown itself is written by the critic model, so give it one that watches video.
+
+## Learning from mistakes
+
+The pipeline keeps a memory of what went wrong, in `lessons/lessons.json`. The file is versioned with the code, so every install starts from what earlier runs learned. Set `--lessons file` or `MOTION_LESSONS` to use another file.
+
+1. **Record.** During a run, `invent`, `refine` and `replicate` log the evidence to `evidence.json`: every critique (scores, what the critic saw, the fixes it asked for), every failed engine test and whether a fix resolved it, which rewrites won or lost, and the film reviews. A run that crashes is recorded too.
+2. **Review.** When the run ends, a reviewer model (the critic by default) reads the evidence next to the existing lessons. It finds the root cause of every low score, failed test and wasted rewrite, and captures moves that made a score jump. It writes up to 8 lessons. Each lesson is a concrete rule for the role that has to change (director, coder, critic or breakdown), with tags and a mode: `exact` for exact copies only, `invent` for original films, or `any`. A mistake that is already known reinforces its existing lesson instead of adding a duplicate.
+3. **Apply.** Every later prompt carries the lessons that fit its role and task, ranked by how often each mistake happened and how well it matches the scene. The coder sees them when it writes, fixes and rewrites. The critic gets them as known failure modes to check first. The director and the breakdown writer get theirs.
+4. **Escalate.** A lesson the model was shown but broke anyway is counted as repeated. It moves up the ranking and is marked `[REPEATED n×]` in the prompt.
+
+```bash
+motion lessons                       # what the platform has learned, most important first
+motion learn out/run-a out/run-b     # learn from finished runs (older runs are read from their transcript)
+motion lessons --remove id1,id2      # drop lessons that turned out wrong
+```
+
+`--no-learn` applies the lessons but does not change them (useful for A/B runs). `--no-lessons` turns the memory off for a run. The review costs one critic call, about $0.02–0.05.
+
+Lessons lower the chance of a repeat, but they cannot rule one out. A model can still ignore a rule, and the repeated count shows where that happens. When the same mistake keeps coming back, turn it into an engine test or a toolkit helper, so that it gets checked or solved in code.
 
 ## Results so far (Jomiez, 24 s, Gemini 3.8 Flash for every role)
 
@@ -220,6 +243,23 @@ Models that cannot watch video (GPT, DeepSeek) are shown 8 evenly spaced still f
 | v5 | + the set-piece library; 1 candidate, 1 rewrite round, bar videos only (no bar code) | $1.83 | "Kinetic Foundry": cream / flame-orange / ink riso world built on four set pieces (3D extruded SOFTWARE over a floor with the camera crashing through the letters, a tilted type cylinder, a shatter into WHAT WE DO BEST, a portal flight). Film review 8/10; scene scores 4.4–5.6. Weakest part again the ending (a small logo in a dark box). `motion refine` ($0.30) produced a much better ending on `S.set.extrude` (400-px 3D logo, 220-px name), but Gemini rejected it: its head-to-head judge picked whichever version it saw first in both orders, and its critic misread the 400-px logo as 200 px. A human pick put it in the final cut |
 
 The cost column is an upper bound: it prices every input token at the full rate, but repeated prompt prefixes (the bar films and code) are billed at Gemini's cached-token rate.
+
+### Exact copy: a 16-s Pinterest promo (DeepSeek codes, Gemini watches)
+
+The reference is a TikTok UI promo: small red-glow kinetic words, a Pinterest "P" drawn on and blown up into a red shockwave, a search UI with typing, a pin grid, a card zoom with a cursor click, a "Pined" pill, and a word-by-word outro.
+
+The pipeline was `replicate --exact --model deepseek/deepseek-v4.1-flash --critic-model google/gemini-3.8-flash`, with 1 candidate and 1 rewrite round. The plan cost $0.12 and the rebuild $0.60.
+
+- **Breakdown.** Without stills, Gemini misread the words ("lacking ideas for … edit … !") and invented a shockwave "!" shot. With the timed stills and frame log, every word and shot boundary matched the reference.
+- **The copy.** It has the same seven shots in the same order, with the same words and palette. It includes the drawn-on "P", the red blast with a white iris opening onto the UI, the typing, the grid with stand-in pins, the card zoom, the share and pin buttons with a cursor click, the "Pined" pill and the outro.
+- **Where it falls short.**
+  - Type is about 30% smaller and more loosely spaced.
+  - A wide pink wash stands in for the reference's tight red glow and motion blur.
+  - The words run up to about 0.2 s off the reference timing.
+  - The pin photos are graphic stand-ins.
+- **Scores.** The critic, judging faithfulness, gave 4.1–5.5 per scene.
+
+The review after the run turned these differences into lessons: timed word states, tight glow radii, stroke-dash logo reveals, clip-path shockwaves and typing cadence.
 
 ## What the research says, and what we measured
 

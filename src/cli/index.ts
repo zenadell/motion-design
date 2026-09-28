@@ -57,11 +57,18 @@ runs through OpenRouter instead and needs OPENROUTER_API_KEY; --model, --code-mo
   motion models   [--openrouter [--filter qwen]]  models your Gemini key can use, or OpenRouter's catalogue with prices
   motion scrape   <url> [--mark #FFFFFF] [-o dir]
                                                  what the brand extractor sees (no model call)
+  motion lessons  [--remove id,id]               what the platform has learned from its past runs
+  motion learn    <run-dir> [<run-dir> …] [--critic-model id]
+                                                 review finished runs and store their lessons
+
+Learning: invent, refine and replicate show each model the lessons from earlier runs that fit its task,
+and review the run afterwards to store new ones (lessons/lessons.json, or --lessons file / MOTION_LESSONS).
+--no-learn keeps the lessons unchanged; --no-lessons turns the memory off for a run.
 
   --brief accepts @file.txt · --replay replies.json plays back recorded model replies (tests, no key)
 `;
 
-const VALUE_FLAGS = ['at', 'crf', 'workers', 'blur', 'from', 'to', 'only', 'brand', 'brief', 'seconds', 'bpm', 'genre', 'model', 'logo', 'effort', 'qa', 'mark', 'replay', 'candidates', 'rounds', 'film-rounds', 'budget', 'target', 'code-model', 'critic-model', 'bar-video', 'bar-code', 'feedback', 'scenes', 'models', 'filter', 'parallel'];
+const VALUE_FLAGS = ['at', 'crf', 'workers', 'blur', 'from', 'to', 'only', 'brand', 'brief', 'seconds', 'bpm', 'genre', 'model', 'logo', 'effort', 'qa', 'mark', 'replay', 'candidates', 'rounds', 'film-rounds', 'budget', 'target', 'code-model', 'critic-model', 'bar-video', 'bar-code', 'feedback', 'scenes', 'models', 'filter', 'parallel', 'lessons', 'remove'];
 
 function parse(argv: string[]) {
   const pos: string[] = [], flags: Record<string, string | true> = {};
