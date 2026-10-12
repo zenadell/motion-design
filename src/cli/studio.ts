@@ -10,7 +10,9 @@ import { ReplayLLM } from '../ai/replay';
 import { renderVideo } from './render';
 import { adapt } from '../studio/adapt';
 import { direct } from '../studio/agent';
-import { copyFilm } from '../studio/copy';
+import { copyFilm, run as runFfmpeg } from '../studio/copy';
+import { ssimOf } from '../ai/inspect';
+import { rectifyVideo, type Quad } from '../studio/rectify';
 import { serveMcp } from '../studio/mcp';
 import { applyOps, describe, type Op } from '../studio/ops';
 
@@ -30,6 +32,9 @@ export const STUDIO_HELP = `Studio (layer-and-keyframe comps; docs/studio.md):
                                                  a model drives the studio: builds comps, looks at contact sheets of its
                                                  own film, fixes what it sees, renders (DEEPSEEK_API_KEY or OpenRouter);
                                                  with --reference it measures the film first and refines the copy
+  motion studio rectify <phone-video.mp4> [-o flat.mp4] [--quad "x,y x,y x,y x,y"] [--no-track]
+                                                 a film shot off a screen with a phone: find the screen, follow the
+                                                 drift, and flatten it to a clean 16:9 video (copy / direct use that)
   motion studio mcp [plan.json]                  MCP server (stdio): any agent edits, renders and compares comps
 `;
 
@@ -118,10 +123,30 @@ export async function runStudio(pos: string[], flags: Flags): Promise<void> {
       if (r.summary) console.log(r.summary);
       if (r.plan && !flags['no-render']) {
         const file = join(dir, 'film.mp4');
-        await renderVideo(r.plan, file, { crf: 18, workers: num(flags.workers) ?? 3, blur: num(flags.blur) ?? 4, log: s => process.stderr.write(`\r${s}   `) });
+        const reference = typeof flags.reference === 'string' ? flags.reference : undefined;
+        // a copy plays under the reference's own soundtrack
+        const plan = reference ? { ...r.plan, music: { ...r.plan.music, volume: 0 } } : r.plan;
+        const silent = reference ? join(dir, 'film.silent.mp4') : file;
+        await renderVideo(plan, silent, { crf: 18, workers: num(flags.workers) ?? 3, blur: num(flags.blur) ?? 4, log: s => process.stderr.write(`\r${s}   `) });
         process.stderr.write('\n');
-        console.log(`✓ ${file}`);
+        if (reference) {
+          await runFfmpeg(['-y', '-i', silent, '-i', reference, '-map', '0:v', '-map', '1:a?', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-shortest', file]);
+          const dur = plan.sections.reduce((a, s) => a + s.beats, 0) * (60 / plan.music.bpm);
+          const ssim = await ssimOf(reference, 0, dur, file);
+          const compare = join(dir, 'compare.mp4');
+          await runFfmpeg(['-y', '-i', reference, '-i', file, '-filter_complex', '[0:v]scale=960:540,setsar=1,fps=30[a];[1:v]scale=960:540,setsar=1,fps=30[b];[a][b]hstack=inputs=2', '-map', '1:a?', '-c:v', 'libx264', '-crf', '22', '-pix_fmt', 'yuv420p', '-shortest', compare]);
+          console.log(`✓ ${file} · fidelity (SSIM) ${ssim?.toFixed(3) ?? 'n/a'} · side by side: ${compare}`);
+        } else console.log(`✓ ${file}`);
       }
+      return;
+    }
+    case 'rectify': {
+      if (!args[0]) throw new Error('usage: motion studio rectify <video.mp4> [-o flat.mp4] [--quad "x,y x,y x,y x,y"]');
+      const quad = typeof flags.quad === 'string' ? (flags.quad.trim().split(/\s+/).map(p => p.split(',').map(Number)) as Quad) : undefined;
+      const file = out ?? args[0].replace(/\.[^.]+$/, '') + '.flat.mp4';
+      const r = await rectifyVideo(args[0], file, { quad, track: !flags['no-track'], log: s => console.error(s) });
+      const dmax = Math.max(0, ...r.drift.map(d => Math.hypot(d.dx, d.dy)));
+      console.log(`✓ ${file} — ${r.frames} frames at ${r.width}×${r.height}; phone drift up to ${dmax.toFixed(1)} px followed`);
       return;
     }
     case 'mcp':

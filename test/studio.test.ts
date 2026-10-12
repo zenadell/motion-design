@@ -13,6 +13,7 @@ import { adapt, replaceSprite } from '../src/studio/adapt';
 import { serveMcp } from '../src/studio/mcp';
 import { offGridTimes, rhythmOf, snapComp } from '../src/studio/rhythm';
 import { factIssues } from '../src/studio/agent';
+import { mapPoint, squareToQuad, warp } from '../src/studio/rectify';
 import type { Key } from '../src/studio/schema';
 
 const plan = (comps: unknown[], sections = [{ technique: 'comp:a', beats: 4 }], assets = {}) => ({ brand: DEMO_BRAND, sections, studio: { comps, assets } });
@@ -353,5 +354,22 @@ describe('the agent fact gate', () => {
     expect(issues.some(i => /"500"/.test(i))).toBe(true);
     expect(issues.some(i => /"4\.9"/.test(i))).toBe(false);
     expect(issues.some(i => /London/.test(i))).toBe(false);
+  });
+});
+
+describe('rectify', () => {
+  it('maps the unit square onto a tilted screen and flattens it back', () => {
+    const q: [number, number][] = [[12, 363], [471, 382], [527, 628], [40, 681]];
+    const m = squareToQuad(q as never);
+    for (const [u, v, k] of [[0, 0, 0], [1, 0, 1], [1, 1, 2], [0, 1, 3]] as const) {
+      const [x, y] = mapPoint(m, u, v);
+      expect(x).toBeCloseTo(q[k][0], 6);
+      expect(y).toBeCloseTo(q[k][1], 6);
+    }
+    // a 4×4 checker drawn into the quad comes back as a checker
+    const sw = 600, sh = 800, src = new Uint8Array(sw * sh * 3);
+    for (let y = 0; y < sh; y++) for (let x = 0; x < sw; x++) src.fill(((x >> 5) + (y >> 5)) % 2 ? 255 : 0, (y * sw + x) * 3, (y * sw + x) * 3 + 3);
+    const flat = warp(src, sw, sh, [[100, 100], [500, 100], [500, 700], [100, 700]], 64, 64);
+    expect(flat[(4 * 64 + 4) * 3]).toBe(src[(110 * sw + 110) * 3]);
   });
 });
