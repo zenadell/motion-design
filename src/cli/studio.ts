@@ -34,7 +34,8 @@ export const STUDIO_HELP = `Studio (layer-and-keyframe comps; docs/studio.md):
                                                  with --reference it measures the film first and refines the copy
   motion studio rectify <phone-video.mp4> [-o flat.mp4] [--quad "x,y x,y x,y x,y"] [--no-track]
                                                  a film shot off a screen with a phone: find the screen, follow the
-                                                 drift, and flatten it to a clean 16:9 video (copy / direct use that)
+                                                 phone's movement, and flatten it to a clean 16:9 video (copy / direct
+                                                 use that); --quad gives the screen's corners in the first frame
   motion studio mcp [plan.json]                  MCP server (stdio): any agent edits, renders and compares comps
 `;
 

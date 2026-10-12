@@ -13,7 +13,7 @@ import { adapt, replaceSprite } from '../src/studio/adapt';
 import { serveMcp } from '../src/studio/mcp';
 import { offGridTimes, rhythmOf, snapComp } from '../src/studio/rhythm';
 import { factIssues } from '../src/studio/agent';
-import { mapPoint, squareToQuad, warp } from '../src/studio/rectify';
+import { applyAffine, chromeMask, mapPoint, registerAffine, squareToQuad, warp, type Affine, type Grey, type Quad } from '../src/studio/rectify';
 import type { Key } from '../src/studio/schema';
 
 const plan = (comps: unknown[], sections = [{ technique: 'comp:a', beats: 4 }], assets = {}) => ({ brand: DEMO_BRAND, sections, studio: { comps, assets } });
@@ -373,5 +373,43 @@ describe('rectify', () => {
     // output pixel (8, 8) samples the source at (153.1, 179.7): inside one checker square, away from its edges
     expect(flat[(8 * 64 + 8) * 3]).toBe(src[(179 * sw + 153) * 3]);
     expect(flat[(8 * 64 + 8) * 3]).toBe(255);
+  });
+
+  // a desk/editor-like texture around the screen, and screen content that changes completely between frames
+  const W = 240, H = 200;
+  const desk = (x: number, y: number) => 120 + 45 * Math.sin(x / 6.5) * Math.cos(y / 8.3) + 30 * Math.sin((x + 2 * y) / 11) + 20 * Math.cos((3 * x - y) / 17);
+  const screenQ: Quad = [[70, 60], [180, 64], [176, 140], [66, 136]];
+  const insideScreen = (x: number, y: number) => x > 64 && x < 182 && y > 58 && y < 142;
+  const frame = (p: Affine, gain: number, bias: number, content: (x: number, y: number) => number): Grey => {
+    const g = new Float32Array(W * H);
+    const det = (1 + p[0]) * (1 + p[4]) - p[1] * p[3];
+    for (let v = 0; v < H; v++)
+      for (let u = 0; u < W; u++) {
+        // the reference point that lands here
+        const du = u - p[2], dv = v - p[5];
+        const x = ((1 + p[4]) * du - p[1] * dv) / det, y = (-p[3] * du + (1 + p[0]) * dv) / det;
+        g[v * W + u] = gain * (insideScreen(x, y) ? content(x, y) : desk(x, y)) + bias;
+      }
+    return { g, w: W, h: H };
+  };
+
+  it('finds how the monitor moved from what surrounds the screen, whatever the screen shows', () => {
+    const ref = frame([0, 0, 0, 0, 0, 0], 1, 0, () => 60);
+    const truth: Affine = [0.03, -0.02, 9.5, 0.015, 0.025, -12.25];
+    // the screen now shows something else entirely, and the phone's exposure changed
+    const cur = frame(truth, 0.85, 14, (x, y) => (Math.sin(x / 3) > 0 ? 230 : 20) + y * 0);
+    const mask = chromeMask(ref, screenQ, 0.04);
+    const { p } = registerAffine(ref, cur, mask);
+    for (const pt of screenQ) {
+      const [ex, ey] = applyAffine(truth, pt), [gx, gy] = applyAffine(p, pt);
+      expect(Math.hypot(ex - gx, ey - gy)).toBeLessThan(0.5);
+    }
+  });
+
+  it('leaves the screen out of the tracking mask', () => {
+    const ref = frame([0, 0, 0, 0, 0, 0], 1, 0, (x, y) => 128 + 100 * Math.sin(x + y));
+    const mask = chromeMask(ref, screenQ, 0.04);
+    expect(mask[100 * W + 120]).toBe(0);
+    expect(mask.reduce((a, b) => a + b, 0)).toBeGreaterThan(W * H * 0.3);
   });
 });
