@@ -27,16 +27,23 @@ function ff(args: string[]): Promise<string> {
   });
 }
 
+const probeText = (file: string) => new Promise<string>(resolve => {
+  const p = spawn(ffmpegPath(), ['-hide_banner', '-i', file], { stdio: ['ignore', 'ignore', 'pipe'] });
+  let err = '';
+  p.stderr.on('data', d => (err += d));
+  p.on('close', () => resolve(err));
+});
+
 export async function videoDuration(file: string): Promise<number> {
-  const out = await new Promise<string>(resolve => {
-    const p = spawn(ffmpegPath(), ['-hide_banner', '-i', file], { stdio: ['ignore', 'ignore', 'pipe'] });
-    let err = '';
-    p.stderr.on('data', d => (err += d));
-    p.on('close', () => resolve(err));
-  });
-  const m = out.match(/Duration:\s*(\d+):(\d+):([\d.]+)/);
+  const m = (await probeText(file)).match(/Duration:\s*(\d+):(\d+):([\d.]+)/);
   if (!m) throw new Error(`could not read the duration of ${file}`);
   return +m[1] * 3600 + +m[2] * 60 + +m[3];
+}
+
+/** The video's frame rate, rounded and kept within what the engine renders (24–60); undefined when unreadable. */
+export async function videoFps(file: string): Promise<number | undefined> {
+  const m = (await probeText(file)).match(/Video:.*?([\d.]+) fps/);
+  return m ? Math.min(60, Math.max(24, Math.round(+m[1]))) : undefined;
 }
 
 /** A small 640-px copy (with audio) for the model, and per-window segments. */
@@ -357,6 +364,8 @@ export async function replicate(llm: LLM, o: ReplicateOptions) {
   const words = shots.flatMap(s => s.text ?? []).join('\n');
   const res = await invent(llm, {
     ...o, kit, brief: o.exact ? `${o.brief}\n${words}` : o.brief, direction: d, bpm, seconds: Math.round(dur * 2) / 2, partial,
+    // an exact copy renders at the reference's own frame rate (a 30 fps TikTok needs half the frames of 60)
+    ...(o.exact ? { fps: await videoFps(o.videoFile) } : {}),
     reference: { note: JSON.stringify({ summary: bd.summary, style: bd.style, typography: bd.typography, motion: bd.motion, texture: bd.texture, sound: bd.sound }), clips: parts, exact: o.exact, ...(o.exact ? { source: { file: o.videoFile, windows } } : {}) },
   });
   if (res.video) {

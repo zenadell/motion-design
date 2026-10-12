@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { ffmpegPath } from '../src/cli/render';
 import { ssimOf } from '../src/ai/inspect';
-import { alignToShots, frameLogFor, referenceFrames, sceneWindows } from '../src/ai/replicate';
+import { alignToShots, frameLogFor, referenceFrames, sceneWindows, videoFps } from '../src/ai/replicate';
 
 describe('replicate: reference stills', () => {
   it('slices the frame log to a shot, with times from the shot start', () => {
@@ -28,6 +28,9 @@ describe('replicate: reference stills', () => {
       expect(frames[0].jpg.subarray(0, 2).toString('hex')).toBe('ffd8');
       const sof = frames[0].jpg.indexOf(Buffer.from([0xff, 0xc0]));
       expect(frames[0].jpg.readUInt16BE(sof + 7)).toBe(320);
+      // each still carries its measured colours; the copy renders at the clip's own frame rate
+      expect(frames[0].colours).toMatch(/^grid #[0-9a-f]{6}/);
+      expect(await videoFps(clip)).toBe(30);
       // fidelity: a clip against itself is ~identical, against another picture it is not
       const other = join(dir, 'other.mp4');
       spawnSync(ffmpegPath(), ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=320x180:rate=30:duration=2', '-pix_fmt', 'yuv420p', other]);

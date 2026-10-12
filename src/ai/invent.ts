@@ -47,6 +47,8 @@ export interface InventOptions {
   render?: boolean;
   workers?: number;
   concurrency?: number;
+  /** Frames per second of the film (default: the engine's 60). */
+  fps?: number;
   /**
    * Exact copy, the quick way (the default for exact copies; false = thorough):
    * one draft per scene, measured against the reference (SSIM) and reviewed
@@ -296,7 +298,7 @@ export async function invent(llm: LLM, o: InventOptions) {
   } as PlanInput['brand'];
   let lib = '', score = '';
   const scenes: SceneCode[] = d.scenes.map(() => ({ draw: '', sfx: '', hits: [] }));
-  const meta = { title: d.title.slice(0, 80) || 'Film', hud: false, captions: false, grain: Math.min(0.2, Math.max(0, Number(d.look.grain) || 0.05)) };
+  const meta = { title: d.title.slice(0, 80) || 'Film', hud: false, captions: false, grain: Math.min(0.2, Math.max(0, Number(d.look.grain) || 0.05)), ...(o.fps ? { fps: o.fps } : {}) };
   const hitsOf = (c: SceneCode, beats: number) => c.hits.filter(h => Number.isFinite(h?.beat) && h.beat >= 0 && h.beat <= beats).slice(0, 32).map(h => ({ beat: h.beat, shake: Math.min(40, Math.max(0, Number(h.shake) || 0)) }));
   const scenePlan = (i: number, c: SceneCode, withScore = false): PlanInput => ({
     meta, brand: brandIn, music: { bpm },
