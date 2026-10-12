@@ -117,11 +117,22 @@ export async function call(S: Session, name: string, a: Json): Promise<Content[]
     case 'studio_describe':
       return text(describe(S.need(), typeof a.comp === 'string' ? a.comp : undefined));
     case 'studio_apply': {
-      const r = applyOps(S.need(), (a.ops ?? []) as Op[]);
-      if (!r.ok) return text(`✗ ${r.error}\nnothing changed`);
+      // models sometimes send the ops as a JSON string, or wrapped in another "arguments" object
+      let ops: unknown = a.ops;
+      if (ops === undefined && typeof a.arguments === 'string') ops = (JSON.parse(a.arguments) as Json).ops;
+      if (typeof ops === 'string') ops = JSON.parse(ops);
+      if (!Array.isArray(ops) || !ops.length) return text('✗ no operations: call studio_apply with { "ops": [ { "op": …, … }, … ] }');
+      const r = applyOps(S.need(), ops as Op[]);
+      if (!r.ok) return text(`✗ ${r.error}\nnothing changed (the whole batch is rejected; fix that operation and send the batch again)`);
       S.plan = r.plan;
       S.save();
-      return text([...r.done.map(d => `✓ ${d}`), ...(r.issues.length ? ['', 'the plan does not validate yet:', formatIssues(r.issues)] : ['', 'plan is valid'])].join('\n'));
+      const onlyEmpty = r.issues.length > 0 && r.issues.every(i => i.path === 'sections');
+      const status = !r.issues.length
+        ? 'the plan is valid'
+        : onlyEmpty
+          ? 'note: the timeline has no sections yet; that is fine while you build comps. Add them with set_sections when the comps exist.'
+          : `the plan does not validate yet (your changes ARE applied; fix these next):\n${formatIssues(r.issues)}`;
+      return text([`✓ applied ${r.done.length} operation${r.done.length === 1 ? '' : 's'} and saved:`, ...r.done.map(d => `  ${d}`), '', status].join('\n'));
     }
     case 'studio_frame': {
       const png = await S.still(Number(a.t));

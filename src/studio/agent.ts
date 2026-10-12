@@ -172,7 +172,7 @@ export async function direct(o: DirectOptions): Promise<DirectResult> {
       const text = out.filter(c => c.type === 'text').map(c => (c as { text: string }).text).join('\n');
       const img = out.filter(c => c.type === 'image');
       images.push(...img);
-      log(`  · ${tc.function.name} ${tc.function.name === 'studio_apply' ? `(${((args.ops as unknown[]) ?? []).length} ops) ` : ''}→ ${text.split('\n').slice(-3).join(' | ').slice(0, 200)}`);
+      log(`  · ${tc.function.name} → ${(text.split('\n')[0] + (text.includes('\n') ? ' … ' + text.split('\n').filter(Boolean).slice(-1)[0] : '')).slice(0, 220)}`);
       messages.push({ role: 'tool', tool_call_id: tc.id, content: (text || 'ok') + (img.length ? `\n(${img.length} image${img.length > 1 ? 's' : ''} in the next message)` : '') });
     }
     if (images.length) {
