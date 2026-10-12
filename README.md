@@ -16,6 +16,16 @@ export GEMINI_API_KEY=...        # https://aistudio.google.com/apikey
 motion make https://jomiez.com --brief "A confident showreel for our software studio" --seconds 20 -o out/jomiez
 ```
 
+## The studio: an After Effects for agents
+
+The studio is a layer-and-keyframe comp format with a camera, mattes, text animators, springs and cubic-bezier eases. A model, a person, or the **measurer** fills in numbers, so nobody has to write drawing code. Any agent can drive it through MCP: it edits a comp, looks at frames, compares them with a reference, and renders. See [docs/studio.md](docs/studio.md).
+
+```bash
+motion studio copy reference.mp4 -o out/copy           # measure a film into an editable comp (no model) and score it
+motion studio adapt out/copy --brand brand.json        # the same motion, with your words, logo and colours
+claude mcp add motion-studio -- node dist/cli.js studio mcp   # let Claude Code (or any MCP client) operate the studio
+```
+
 ## Quick start
 
 ```bash

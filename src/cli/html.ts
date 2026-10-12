@@ -17,7 +17,8 @@ function fontFile(pkg: string, file: string): string {
 
 function fontFaces(plan: Plan): string {
   const f = plan.brand.fonts, out: string[] = [];
-  for (const family of [f.display, f.mono, f.serif].filter(Boolean) as string[]) {
+  const studioFonts = (plan.studio?.comps ?? []).flatMap(c => JSON.stringify(c.layers).match(/"font":"[^"]+"/g) ?? []).map(m => m.slice(8, -1));
+  for (const family of new Set([f.display, f.mono, f.serif, ...studioFonts].filter(Boolean) as string[])) {
     const e = fontEntry(family);
     if (!e) continue;
     const w = e.min === e.max ? `${e.min}` : `${e.min} ${e.max}`;
@@ -32,9 +33,11 @@ const esc = (s: string) => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;
 /** A single self-contained HTML file: fonts, engine, plan and (if needed) map data inlined. */
 export function buildHtml(plan: Plan): string {
   const engine = readFileSync(process.env.MOTION_ENGINE_PATH || join(ROOT, 'dist', 'engine.js'), 'utf8').replace(/<\/script/gi, '<\\/script');
-  const needsLand = plan.sections.some(s => s.technique === 'dot-globe') || /globe/.test(JSON.stringify(plan.custom ?? ''));
+  // code scenes and studio comps (technique and code layers) can use the globe and the 3D bundle too
+  const code = JSON.stringify(plan.custom ?? '') + JSON.stringify(plan.studio?.comps ?? '');
+  const needsLand = plan.sections.some(s => s.technique === 'dot-globe') || /globe/.test(code);
   const land = needsLand ? readFileSync(join(ROOT, 'assets', 'land-dots.json'), 'utf8') : '[]';
-  const needs3d = /S\.three\b|\b(logo3d|type3d|shapes3d)\b/.test(JSON.stringify(plan.custom ?? ''));
+  const needs3d = /S\.three\b|\b(logo3d|type3d|shapes3d)\b/.test(code);
   const three = needs3d ? `<script>${readFileSync(process.env.MOTION_THREE_PATH || join(ROOT, 'dist', 'three.js'), 'utf8').replace(/<\/script/gi, '<\\/script')}</script>\n` : '';
   const c = plan.brand.colors;
   const data = JSON.stringify(plan).replace(/</g, '\\u003c');

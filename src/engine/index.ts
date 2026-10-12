@@ -3,6 +3,7 @@ import { formatIssues, validatePlan } from '../plan/validate';
 import { setLand } from './assets/land';
 import { startPlayer } from './player';
 import { createEngine } from './render';
+import { preloadStudio } from '../studio/render';
 
 export interface BootOptions {
   plan: unknown;
@@ -33,6 +34,7 @@ async function boot(opts: BootOptions): Promise<void> {
     f.serif ? document.fonts.load(`italic 400 100px "${f.serif}"`) : Promise.resolve(),
     f.serif ? document.fonts.load(`400 100px "${f.serif}"`) : Promise.resolve(),
   ]);
+  await preloadStudio(res.plan.studio);
   startPlayer(createEngine(res.plan));
 }
 

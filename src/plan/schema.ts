@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { StudioSchema } from '../studio/schema';
 import { CHORD_RE } from '../engine/audio/chords';
 import { DISPLAY_NAMES, MONO_NAMES, SERIF_NAMES } from './fonts';
 
@@ -110,6 +111,8 @@ export const PlanSchema = z.object({
   music: MusicSchema.prefault({}),
   sections: z.array(SectionSchema).min(1).max(40),
   custom: CustomSchema.optional(),
+  /** Layer-and-keyframe comps (src/studio); a section plays one with technique "comp:<id>". */
+  studio: StudioSchema.optional(),
 });
 
 export type PlanInput = z.input<typeof PlanSchema>;

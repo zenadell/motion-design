@@ -8,6 +8,7 @@ import { font, setTheme } from './core/theme';
 import { makeTheme } from './core/theme-build';
 import { buildTimeline, sectionIndexAt } from './core/timeline';
 import { installCustom } from './custom/stage';
+import { installStudio } from '../studio/render';
 import { setCustomTechniques } from './techniques';
 import type { Ctx } from './techniques/types';
 
@@ -55,7 +56,7 @@ export function createEngine(plan: Plan): Engine {
   const custom = plan.custom
     ? installCustom(plan.custom, { B: B0, start: 0, dur: 0, beats: 0, index: -1, fps: plan.meta.fps, theme, brand, music, captions: plan.meta.captions, energy: 0, bt: b => b * B0 })
     : undefined;
-  setCustomTechniques(custom?.techniques ?? []);
+  setCustomTechniques([...(custom?.techniques ?? []), ...(plan.studio ? installStudio(plan.studio) : [])]);
   const errors: Engine['errors'] = [...(custom?.errors ?? [])];
   const report = (where: string, e: unknown) => {
     if (!errors.some(x => x.where === where)) errors.push({ where, message: String((e as Error)?.message ?? e), stack: (e as Error)?.stack?.split('\n').slice(0, 4).join('\n') });
