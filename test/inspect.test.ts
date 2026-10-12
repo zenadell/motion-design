@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { spring } from '../src/engine/custom/toolkit';
-import { background, boxOf, classify, frameStats, gaps, hottest, lagOf, overshoots, springFor, type RGB } from '../src/ai/inspect';
+import { background, boxOf, classify, colourNote, frameStats, gaps, hottest, lagOf, overshoots, springFor, type RGB } from '../src/ai/inspect';
 
 /** A white frame with filled rectangles (fractions) in the given colours. */
 function frame(w: number, h: number, rects: { x0: number; y0: number; x1: number; y1: number; c: [number, number, number] }[], bg: [number, number, number] = [255, 255, 255]): RGB {
@@ -79,5 +79,20 @@ describe('detail inspector: motion', () => {
     const late = Array.from({ length: 60 }, (_, k) => (k === 24 || k === 44 ? 1 : 0));
     expect(lagOf(a, late, 10).shift).toBe(4);
     expect(lagOf(late, a, 10).shift).toBe(-4);
+  });
+});
+
+describe('colourNote', () => {
+  it('reports the measured colours: a 3×3 grid and the most common ones', () => {
+    // a lime field, darker on the right third, with a white bar in the middle
+    const w = 90, h = 60, data = new Uint8Array(w * h * 3);
+    for (let y = 0; y < h; y++)
+      for (let x = 0; x < w; x++) {
+        const c = y >= 25 && y < 35 && x >= 35 && x < 55 ? [255, 255, 255] : x >= 60 ? [10, 92, 26] : [43, 224, 31];
+        data.set(c, (y * w + x) * 3);
+      }
+    const note = colourNote({ w, h, data });
+    expect(note).toMatch(/^grid #2be01f #[0-9a-f]{6} #0a5c1a \/ /);
+    expect(note).toMatch(/most common #2be01f \d+%, #0a5c1a 33%, #ffffff 4%/);
   });
 });

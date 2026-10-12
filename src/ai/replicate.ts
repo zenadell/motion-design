@@ -6,6 +6,7 @@ import { ffmpegPath } from '../cli/render';
 import { DISPLAY_NAMES, SERIF_NAMES } from '../plan/fonts';
 import { TRANSITIONS } from '../plan/schema';
 import type { BrandKit } from './brand-kit';
+import { colourNote, decode } from './inspect';
 import { invent, type InventOptions } from './invent';
 import { directionSchema, type Direction } from './invent-prompts';
 import craft from '../../docs/motion-craft.md?raw';
@@ -26,16 +27,23 @@ function ff(args: string[]): Promise<string> {
   });
 }
 
+const probeText = (file: string) => new Promise<string>(resolve => {
+  const p = spawn(ffmpegPath(), ['-hide_banner', '-i', file], { stdio: ['ignore', 'ignore', 'pipe'] });
+  let err = '';
+  p.stderr.on('data', d => (err += d));
+  p.on('close', () => resolve(err));
+});
+
 export async function videoDuration(file: string): Promise<number> {
-  const out = await new Promise<string>(resolve => {
-    const p = spawn(ffmpegPath(), ['-hide_banner', '-i', file], { stdio: ['ignore', 'ignore', 'pipe'] });
-    let err = '';
-    p.stderr.on('data', d => (err += d));
-    p.on('close', () => resolve(err));
-  });
-  const m = out.match(/Duration:\s*(\d+):(\d+):([\d.]+)/);
+  const m = (await probeText(file)).match(/Duration:\s*(\d+):(\d+):([\d.]+)/);
   if (!m) throw new Error(`could not read the duration of ${file}`);
   return +m[1] * 3600 + +m[2] * 60 + +m[3];
+}
+
+/** The video's frame rate, rounded and kept within what the engine renders (24–60); undefined when unreadable. */
+export async function videoFps(file: string): Promise<number | undefined> {
+  const m = (await probeText(file)).match(/Video:.*?([\d.]+) fps/);
+  return m ? Math.min(60, Math.max(24, Math.round(+m[1]))) : undefined;
 }
 
 /** A small 640-px copy (with audio) for the model, and per-window segments. */
@@ -60,11 +68,12 @@ export async function referenceClips(file: string, windows: { from: number; to: 
  * Sharp still frames at a steady rate, with their times: a model reads small
  * words and measures layout from these far better than from a compressed clip.
  */
-export async function referenceFrames(file: string, fps: number, width = 1024): Promise<{ t: number; jpg: Buffer }[]> {
+export async function referenceFrames(file: string, fps: number, width = 1024): Promise<{ t: number; jpg: Buffer; colours: string }[]> {
   const tmp = mkdtempSync(join(tmpdir(), 'motion-refframes-'));
   try {
     await ff(['-y', '-loglevel', 'error', '-i', file, '-vf', `fps=${fps},scale='min(${width},iw)':-2`, '-q:v', '3', join(tmp, 'f%04d.jpg')]);
-    return readdirSync(tmp).filter(f => f.endsWith('.jpg')).sort().map((f, k) => ({ t: k / fps, jpg: readFileSync(join(tmp, f)) }));
+    const small = await decode(file, { fps, w: 192, h: 108 });
+    return readdirSync(tmp).filter(f => f.endsWith('.jpg')).sort().map((f, k) => ({ t: k / fps, jpg: readFileSync(join(tmp, f)), colours: small[k] ? colourNote(small[k]) : '' }));
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }
@@ -175,12 +184,12 @@ async function breakdown(critic: LLM, file: string, dur: number, outDir: string,
   // the clip for motion and sound, and sharp timed stills for words and layout
   const fps = Math.min(4, Math.max(0.5, Math.floor((72 / Math.max(1, dur)) * 2) / 2));
   const stills = await referenceFrames(file, fps);
-  const stillParts: Part[] = stills.flatMap(f => [text(`t=${f.t.toFixed(2)} s`), image(f.jpg, 'image/jpeg')]);
+  const stillParts: Part[] = stills.flatMap(f => [text(`t=${f.t.toFixed(2)} s${f.colours ? ` · measured colours: ${f.colours}` : ''}`), image(f.jpg, 'image/jpeg')]);
   const bdRes = await critic.json({
     label: 'breakdown', effort: 'high', schema: breakdownSchema(),
     system: `You are a senior motion designer breaking down a reference film so a team can rebuild it shot for shot. Watch it closely (with sound) and describe everything that makes it work: every shot with its exact start and end time, composition, what moves and how (timing, easing, overshoot, stagger), typography, colour, texture, camera, transitions, and the music. Be precise: numbers, positions, sizes relative to the frame, beat positions.
 
-You also get sharp still frames every ${(1 / fps).toFixed(2)} s, each labelled with its time. Work from them first: fill frameLog with one entry per still (read every word exactly as written, however small; measure sizes and positions against the frame; note colours), then derive the shots from the log: a new shot starts where the composition changes. Words must match the frames character for character; never guess or complete a phrase. Small elements stay small: report the size you measure, not a typical one.
+You also get sharp still frames every ${(1 / fps).toFixed(2)} s, each labelled with its time and its colours measured from the pixels (a 3×3 grid of mean colours and the most common colours): report those measured hex values, never the colours you remember for a brand. Work from them first: fill frameLog with one entry per still (read every word exactly as written, however small; measure sizes and positions against the frame; note colours), then derive the shots from the log: a new shot starts where the composition changes. Words must match the frames character for character; never guess or complete a phrase. Small elements stay small: report the size you measure, not a typical one.
 
 # Craft handbook (vocabulary)
 ${craft}`,
@@ -194,18 +203,87 @@ ${craft}`,
   }
 }
 
+/**
+ * Exact copy: where each scene starts and ends in the reference, in seconds
+ * (n + 1 edges, 0 … dur). Every scene covers whole shots: one shot each when the
+ * counts match, else the grouping of consecutive shots that best matches the
+ * scenes, by their on-screen words first and their planned lengths second (a
+ * director that merged shots, or a scene list cut short). Undefined when the
+ * shots cannot be used (none, or fewer shots than scenes).
+ */
+export function shotEdges(bd: Breakdown, d: Direction, dur: number): number[] | undefined {
+  const shots = (bd.shots ?? []).filter(s => Number.isFinite(s?.start) && Number.isFinite(s?.end) && s.end > s.start && s.start < dur).sort((a, b) => a.start - b.start);
+  const n = d.scenes.length, m = shots.length;
+  if (!n || m < n) return undefined;
+  // shot j spans from its start to the next shot's start (the last one to the end of the film)
+  const at = (j: number) => (j === 0 ? 0 : j >= m ? dur : shots[j].start);
+  let first: number[];
+  if (m === n) first = shots.map((_, j) => j);
+  else {
+    const total = d.scenes.reduce((a, s) => a + s.beats, 0) || 1;
+    const want = d.scenes.map(s => (s.beats / total) * dur);
+    const words = (t: string[] | undefined) => new Set((t ?? []).join(' ').toLowerCase().match(/[\p{L}\p{N}]{2,}/gu) ?? []);
+    const sw = d.scenes.map(s => words(s.onscreenText)), hw = shots.map(s => words(s.text));
+    // 1 = same words (or both wordless), 0 = nothing in common
+    const sim = (i: number, j: number) => {
+      const a = sw[i], b = hw[j];
+      if (!a.size || !b.size) return a.size || b.size ? 0 : 0.5;
+      let common = 0;
+      for (const w of a) if (b.has(w)) common++;
+      return common / (a.size + b.size - common);
+    };
+    const cost = (i: number, a: number, b: number) => {
+      let c = 0.25 * Math.log(Math.max(1e-3, at(b) - at(a)) / Math.max(1e-3, want[i])) ** 2;
+      for (let j = a; j < b; j++) c += 1 - sim(i, j);
+      return c;
+    };
+    // best[i][j]: scenes 0..i-1 over shots 0..j-1; from[i][j]: where scene i-1 starts
+    const best = Array.from({ length: n + 1 }, () => new Array<number>(m + 1).fill(Infinity));
+    const from = Array.from({ length: n + 1 }, () => new Array<number>(m + 1).fill(0));
+    best[0][0] = 0;
+    for (let i = 1; i <= n; i++)
+      for (let j = i; j <= m - (n - i); j++)
+        for (let k = i - 1; k < j; k++) {
+          const c = best[i - 1][k] + cost(i - 1, k, j);
+          if (c < best[i][j]) { best[i][j] = c; from[i][j] = k; }
+        }
+    first = new Array<number>(n);
+    for (let i = n, j = m; i > 0; i--) j = first[i - 1] = from[i][j];
+  }
+  const edges = first.map(j => at(j));
+  edges.push(dur);
+  return edges.every((e, i) => i === 0 || e > edges[i - 1]) ? edges : undefined;
+}
+
 /** The reference segment of each scene: the shot times in exact mode, else in proportion to the beats. */
 export function sceneWindows(bd: Breakdown, d: Direction, dur: number, exact: boolean): { from: number; to: number }[] {
+  const edges = exact ? shotEdges(bd, d, dur) : undefined;
+  if (edges) return d.scenes.map((_, i) => ({ from: edges[i], to: edges[i + 1] }));
   const total = d.scenes.reduce((a, s) => a + s.beats, 0) || 1;
-  const shots = bd.shots ?? [];
   let acc = 0;
-  return d.scenes.map((s, i) => {
+  return d.scenes.map(s => {
     const from = (acc / total) * dur;
     acc += s.beats;
-    const sh = shots[i];
-    if (exact && shots.length === d.scenes.length && Number.isFinite(sh?.start) && sh.end > sh.start) return { from: sh.start, to: Math.min(dur, sh.end) };
     return { from, to: (acc / total) * dur };
   });
+}
+
+/**
+ * Exact copy: give each scene the length of its shots, so the copy cuts where
+ * the reference cuts. Edges go to the quarter-beat grid counted from the film
+ * start (rounding never adds up along the film); every scene keeps at least a
+ * quarter beat. Sets the scene beats and returns the scene windows.
+ */
+export function alignToShots(bd: Breakdown, d: Direction, dur: number, bpm: number): { from: number; to: number }[] {
+  const windows = sceneWindows(bd, d, dur, true);
+  const grid = (t: number) => Math.round(((t * bpm) / 60) * 4) / 4;
+  let prev = 0;
+  d.scenes.forEach((s, i) => {
+    const end = Math.max(prev + 0.25, grid(windows[i].to));
+    s.beats = end - prev;
+    prev = end;
+  });
+  return windows;
 }
 
 function loadPlan(dir: string): { breakdown: Breakdown; direction: Direction } | undefined {
@@ -268,7 +346,7 @@ export async function replicate(llm: LLM, o: ReplicateOptions) {
   d.sound = { ...(d.sound ?? { description: bd.sound }), bpm };
   if (o.exact) d.exact = true;
   const shots = bd.shots ?? [];
-  const windows = sceneWindows(bd, d, dur, !!o.exact);
+  const windows = o.exact ? alignToShots(bd, d, dur, bpm) : sceneWindows(bd, d, dur, false);
   if (o.exact && bd.frameLog?.length && !saved) {
     // the coder gets the measured frames of its own shot verbatim
     d.scenes.forEach((s, i) => {
@@ -286,6 +364,8 @@ export async function replicate(llm: LLM, o: ReplicateOptions) {
   const words = shots.flatMap(s => s.text ?? []).join('\n');
   const res = await invent(llm, {
     ...o, kit, brief: o.exact ? `${o.brief}\n${words}` : o.brief, direction: d, bpm, seconds: Math.round(dur * 2) / 2, partial,
+    // an exact copy renders at the reference's own frame rate (a 30 fps TikTok needs half the frames of 60)
+    ...(o.exact ? { fps: await videoFps(o.videoFile) } : {}),
     reference: { note: JSON.stringify({ summary: bd.summary, style: bd.style, typography: bd.typography, motion: bd.motion, texture: bd.texture, sound: bd.sound }), clips: parts, exact: o.exact, ...(o.exact ? { source: { file: o.videoFile, windows } } : {}) },
   });
   if (res.video) {

@@ -1,5 +1,6 @@
 import type { z } from 'zod';
 import { checkCustom } from '../engine/custom/stage';
+import { checkStudio } from '../studio/validate';
 import { getTechnique, techniqueIds } from '../engine/techniques';
 import { PlanSchema, type Plan } from './schema';
 
@@ -46,8 +47,15 @@ export function validatePlan(input: unknown): ValidationResult {
     if (plan.custom!.scenes.findIndex(o => o.id === c.id) !== i) errors.push({ path: `custom.scenes[${i}].id`, message: `duplicate scene id "${c.id}"` });
   });
   errors.push(...checkCustom(plan.custom));
+  errors.push(...checkStudio(plan.studio));
+  const compIds = new Set((plan.studio?.comps ?? []).map(c => c.id));
   plan.sections.forEach((s, i) => {
     const at = `sections[${i}]`;
+    if (s.technique.startsWith('comp:')) {
+      const id = s.technique.slice(5);
+      if (!compIds.has(id)) errors.push({ path: `${at}.technique`, message: `no studio comp "${id}"; defined: ${[...compIds].join(', ') || '(none)'}` });
+      return;
+    }
     if (s.technique.startsWith('scene:')) {
       const id = s.technique.slice(6);
       if (!sceneIds.has(id)) errors.push({ path: `${at}.technique`, message: `no custom scene "${id}"; defined: ${[...sceneIds].join(', ') || '(none)'}` });

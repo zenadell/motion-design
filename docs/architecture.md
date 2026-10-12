@@ -29,6 +29,18 @@ src/
     qa.ts               settled frames → Gemini vision critique → revision brief
     pipeline.ts         make(): brand → plan → review → outputs + report
     replay.ts           recorded replies instead of a model (tests, CI)
+  studio/               layer-and-keyframe comps (docs/studio.md)
+    schema.ts           comp format: layers, keyframes, eases, camera, mattes, text animators
+    anim.ts             keyframe evaluation, beziers, springs, 2D transforms (browser + Node)
+    render.ts           draws comps; installs each as technique "comp:<id>" (browser)
+    validate.ts         references, techniques, code, assets, fonts → exact error paths
+    ops.ts              editing operations + a one-line-per-layer summary for agents
+    measure.ts          reference film → shots, background model, tracked elements, sprites, keyframes
+    fit.ts              measured curves → fewest keyframes with fitted eases (named, bezier, spring)
+    copy.ts             measure → render → reference soundtrack → SSIM → side by side
+    adapt.ts            a vision model maps each measured element to the brand's words / logo / shape
+    mcp.ts              the studio as an MCP server (stdio)
+    png.ts              PNG encoder for sprites
   cli/                  Node: bundled to dist/cli.js
     html.ts             single-file HTML (fonts/engine/plan/land inlined)
     browser.ts          headless Chromium via Playwright
@@ -91,6 +103,8 @@ Then add it to `techniques/index.ts`. The catalog, docs, validation, gallery and
 - **Planner:** Gemini 3.8 Flash gets the brief, the brand facts, the catalog and [authoring-guide.md](authoring-guide.md), and returns a plan using structured output (one schema branch per technique).
 - **Repair loop:** validator and lint issues go back to the model until the plan is clean. Small length errors are fixed in code.
 - **Visual QA loop:** settled frames of every section go to Gemini vision. Its fixes go back to the planner in the same conversation.
+
+**Studio (in progress): an After Effects for agents.** Comps of layers and keyframes that models fill with numbers instead of code; a measurer that turns a reference film into such a comp without a model; and an MCP server so any agent can edit, look, compare and render. Next: a refine loop where a cheap model edits the measured comp with `studio_compare` feedback, Blender for real 3D shots, and generated images for things code can't draw.
 
 **Phase 3: product.** A web app to upload a brand, pick a recipe, preview live in the browser (the engine already runs there), edit copy and timing, and export. Plus a render queue on server workers, 9:16 and 1:1 formats, and more genres and techniques.
 

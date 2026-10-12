@@ -43,7 +43,7 @@ const frameCache = new Map<string, Promise<{ frames: Buffer[]; seconds: number }
  * Fit the parts to what the model can read: a video becomes evenly spaced
  * still frames for image-only models, and a short note for text-only ones.
  */
-export async function adaptTurns(turns: Turn[], accepts: Set<string> | undefined): Promise<Turn[]> {
+export async function adaptTurns(turns: Turn[], accepts: Set<string> | undefined, count = 8): Promise<Turn[]> {
   if (!accepts || accepts.has('video')) return turns;
   const out: Turn[] = [];
   for (const t of turns) {
@@ -51,9 +51,9 @@ export async function adaptTurns(turns: Turn[], accepts: Set<string> | undefined
     for (const p of t.parts) {
       if ('video' in p) {
         if (!accepts.has('image')) { parts.push({ text: '(a video clip was attached here; this model cannot view it)' }); continue; }
-        const key = `${p.video.data.length}:${p.video.data.slice(0, 64)}:${p.video.data.slice(-64)}`;
+        const key = `${count}:${p.video.data.length}:${p.video.data.slice(0, 64)}:${p.video.data.slice(-64)}`;
         let f = frameCache.get(key);
-        if (!f) frameCache.set(key, (f = videoFrames(Buffer.from(p.video.data, 'base64'), 8)));
+        if (!f) frameCache.set(key, (f = videoFrames(Buffer.from(p.video.data, 'base64'), count)));
         const { frames, seconds } = await f;
         parts.push({ text: `(video shown as ${frames.length} still frames, evenly spaced over ${seconds.toFixed(1)} s)` });
         for (const fr of frames) parts.push({ image: { mime: 'image/jpeg', data: fr.toString('base64') } });

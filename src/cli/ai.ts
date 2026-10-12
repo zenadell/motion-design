@@ -4,6 +4,7 @@ import { extractBrand } from '../ai/brand';
 import { loadBrandKit } from '../ai/brand-kit';
 import { Gemini, DEFAULT_MODEL, apiKey } from '../ai/gemini';
 import { isOpenRouterId, llmFor } from '../ai/models';
+import { deepSeekKey, isDeepSeekId } from '../ai/deepseek';
 import { openRouterKey } from '../ai/openrouter';
 import { bakeoff } from './bakeoff';
 import { summarizeUsage, type LLM, type Usage } from '../ai/llm';
@@ -32,7 +33,9 @@ const svgOf = (d: string, box: number[]) => `<svg xmlns="http://www.w3.org/2000/
 
 /** A model by id: "provider/model" ids go through OpenRouter, bare ids to Gemini. */
 function modelById(id: string | undefined): LLM {
-  if (isOpenRouterId(id)) {
+  if (isDeepSeekId(id)) {
+    if (!deepSeekKey()) throw new Error('set DEEPSEEK_API_KEY first (https://platform.deepseek.com/api_keys)');
+  } else if (isOpenRouterId(id)) {
     if (!openRouterKey()) throw new Error('set OPENROUTER_API_KEY first (https://openrouter.ai/keys)');
   } else if (!apiKey()) throw new Error('set GEMINI_API_KEY first (https://aistudio.google.com/apikey)');
   return llmFor(id, log);
@@ -238,7 +241,7 @@ export async function runAi(cmd: string, pos: string[], flags: Flags): Promise<b
       const kit = loadBrandKit(str(flags.brand) ? JSON.parse(readFileSync(str(flags.brand)!, 'utf8')) : { brand: { name: 'Reference', colors: { bg: '#0B0B0D', text: '#FFFFFF', primary: '#FF4D2E', secondary: '#FFFFFF' } } });
       const sub = (flag: string) => roleModel(flags, flag);
       const res = await replicate(llm, {
-        videoFile: pos[0], kit, brief: readBrief(flags), keepColors: !!flags['keep-colors'], exact, planOnly: !!flags['plan-only'], reusePlan: !!flags['reuse-plan'], resumePartial: !!flags['resume-partial'],
+        videoFile: pos[0], kit, brief: readBrief(flags), keepColors: !!flags['keep-colors'], exact, planOnly: !!flags['plan-only'], reusePlan: !!flags['reuse-plan'], resumePartial: !!flags['resume-partial'], quick: !flags.thorough,
         candidates: num(flags.candidates), rounds: num(flags.rounds), filmRounds: flags['no-qa'] ? 0 : num(flags['film-rounds']),
         budget: num(flags.budget), target: num(flags.target), render: !flags['no-render'], workers: num(flags.workers) ?? 3, outDir: dir, log,
         codeLLM: sub('code-model'), criticLLM: sub('critic-model'), lessons: lessonsOf(flags), noLearn: !!flags['no-learn'],

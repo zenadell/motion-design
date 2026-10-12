@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Browser } from 'playwright';
 import { dataUrlToBuffer, launch, openReel } from '../cli/browser';
@@ -12,7 +12,7 @@ import { factCorpus, type BrandKit } from './brand-kit';
 import { inspectScene, referenceStills, type Detail } from './inspect';
 import { learn, newEvidence, sceneEvidence, type Lessons, type Role } from './lessons';
 import { beatReport, motionReport, type MotionReport } from './metrics';
-import { image, parseJson, summarizeUsage, text, user, video, type Effort, type LLM, type Part, type Usage } from './llm';
+import { image, LLMError, parseJson, summarizeUsage, text, user, video, type Effort, type LLM, type Part, type Usage } from './llm';
 import {
   coderSystem, conceptsSchema, conceptsUser, critiqueScore, detailCriticSystem, detailSchema, developUser, directionSchema, directorSystem, directorUser, filmCriticSchema, filmCriticSystem, fixUser, libSchema, libUser,
   pairSchema, pairSystem, pickSchema, pickSystem, type Concept,
@@ -47,6 +47,15 @@ export interface InventOptions {
   render?: boolean;
   workers?: number;
   concurrency?: number;
+  /** Frames per second of the film (default: the engine's 60). */
+  fps?: number;
+  /**
+   * Exact copy, the quick way (the default for exact copies; false = thorough):
+   * one draft per scene, measured against the reference (SSIM) and reviewed
+   * once for its differences; one rewrite, kept only if it measures closer; no
+   * model-judged head-to-heads or film review; up to 12 scenes at once.
+   */
+  quick?: boolean;
   outDir: string;
   log?: (s: string) => void;
   /** Separate models for writing code and for critiquing (default: the main model). */
@@ -117,6 +126,23 @@ export function unverifiedNumbers(code: string, corpus: string, allowed: string[
   return [...out];
 }
 
+/** At most `n` of the wrapped tasks run at once; the rest wait their turn. */
+export function slots(n: number) {
+  let free = n;
+  const waiting: (() => void)[] = [];
+  return async <T>(f: () => Promise<T>): Promise<T> => {
+    if (free > 0) free--;
+    else await new Promise<void>(r => waiting.push(r));
+    try {
+      return await f();
+    } finally {
+      const next = waiting.shift();
+      if (next) next();
+      else free++;
+    }
+  };
+}
+
 async function pool<T, R>(items: T[], n: number, f: (x: T, i: number) => Promise<R>): Promise<R[]> {
   const out: R[] = new Array(items.length);
   let next = 0;
@@ -148,6 +174,9 @@ export function directionProblems(d: Partial<Direction> | undefined): string[] {
   return out;
 }
 
+/** An error no retry or other scene can get past: the model account is out of credit or the key is refused. */
+const accountError = (e: unknown) => e instanceof LLMError && (e.status === 401 || e.status === 402);
+
 export async function invent(llm: LLM, o: InventOptions) {
   const log = o.log ?? (() => {});
   const codeLLM = o.codeLLM ?? llm, criticLLM = o.criticLLM ?? llm;
@@ -157,7 +186,7 @@ export async function invent(llm: LLM, o: InventOptions) {
   const usage: Usage[] = [];
   const audit: { step: string; model: string; at: string; reply: string }[] = [];
   const t0 = Date.now();
-  const fixRounds = o.fixRounds ?? 3, conc = o.concurrency ?? 3, budget = o.budget ?? 6, target = o.target ?? 9;
+  const fixRounds = o.fixRounds ?? 3, budget = o.budget ?? 6, target = o.target ?? 9;
   const spent = () => summarizeUsage(usage).usd ?? 0;
   const coder = () => coderSystem(o.bar?.code);
   const feedbackNote = o.feedback ? `\n\nCLIENT FEEDBACK ON EARLIER VERSIONS (must be respected):\n${o.feedback}` : '';
@@ -195,6 +224,8 @@ export async function invent(llm: LLM, o: InventOptions) {
     try {
       return await f();
     } catch (e) {
+      // no credit or a bad key fails every later call too: stop now, keeping what is finished
+      if (accountError(e)) throw e;
       log(`    ${what} failed, skipped: ${String((e as Error).message ?? e).slice(0, 160)}`);
       return null;
     }
@@ -225,18 +256,27 @@ export async function invent(llm: LLM, o: InventOptions) {
   const bpm = Math.min(140, Math.max(90, o.bpm ?? d.sound?.bpm ?? 120));
   const targetBeats = Math.round(((seconds * bpm) / 60) * 2) / 2;
   const ids = new Set<string>();
-  d.scenes = d.scenes.slice(0, 12).map((s, i) => {
+  // an exact copy has one scene per reference shot, however many; its scene lengths are the shots' own
+  const exactShots = !!o.reference?.exact && !!o.reference.source;
+  d.scenes = d.scenes.slice(0, exactShots ? 40 : 12).map((s, i) => {
     let id = (s.id || `scene-${i + 1}`).toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^[^a-z]+/, '').slice(0, 32) || `scene-${i + 1}`;
     while (ids.has(id)) id = `${id.slice(0, 29)}-${i}`;
     ids.add(id);
     return { ...s, id, onscreenText: s.onscreenText ?? [] };
   });
-  const fitted = fitScenes(d.scenes.map(s => s.beats), targetBeats);
-  d.scenes.forEach((s, i) => (s.beats = fitted[i]));
+  if (!exactShots) {
+    const fitted = fitScenes(d.scenes.map(s => s.beats), targetBeats);
+    d.scenes.forEach((s, i) => (s.beats = fitted[i]));
+  }
   writeFileSync(f('direction.json'), JSON.stringify(d, null, 2));
   log(`  "${d.title}" — ${d.concept}`);
   log(`  ${d.scenes.length} scenes · ${bpm} BPM · ${d.look.display}${d.look.serif ? ` + ${d.look.serif}` : ''} · ${d.vibe.join(', ')}`);
   const exact = !!o.reference?.exact;
+  const quick = exact && (o.quick ?? true);
+  // model calls wait on the network, so many scenes can be in flight; renders share the CPU, so only a few run at once
+  const conc = o.concurrency ?? (quick ? 12 : 3);
+  const renderSlot = slots(3);
+  const nCands = o.candidates ?? (quick ? 1 : 2), nRounds = o.rounds ?? (quick ? 1 : 2), nFilmRounds = o.filmRounds ?? (quick ? 0 : 1);
   const ev = newEvidence(exact ? 'exact' : o.reference ? 'adapt' : 'invent', { code: codeLLM.model, critic: criticLLM.model, direction: o.direction ? undefined : llm.model }, target);
   ev.title = d.title;
   const lessonMode = exact ? 'exact' : 'invent';
@@ -258,7 +298,7 @@ export async function invent(llm: LLM, o: InventOptions) {
   } as PlanInput['brand'];
   let lib = '', score = '';
   const scenes: SceneCode[] = d.scenes.map(() => ({ draw: '', sfx: '', hits: [] }));
-  const meta = { title: d.title.slice(0, 80) || 'Film', hud: false, captions: false, grain: Math.min(0.2, Math.max(0, Number(d.look.grain) || 0.05)) };
+  const meta = { title: d.title.slice(0, 80) || 'Film', hud: false, captions: false, grain: Math.min(0.2, Math.max(0, Number(d.look.grain) || 0.05)), ...(o.fps ? { fps: o.fps } : {}) };
   const hitsOf = (c: SceneCode, beats: number) => c.hits.filter(h => Number.isFinite(h?.beat) && h.beat >= 0 && h.beat <= beats).slice(0, 32).map(h => ({ beat: h.beat, shake: Math.min(40, Math.max(0, Number(h.shake) || 0)) }));
   const scenePlan = (i: number, c: SceneCode, withScore = false): PlanInput => ({
     meta, brand: brandIn, music: { bpm },
@@ -273,6 +313,9 @@ export async function invent(llm: LLM, o: InventOptions) {
     },
     sections: d.scenes.map((s, i) => ({ technique: `scene:${s.id}`, beats: s.beats, ...(i < d.scenes.length - 1 && s.transition !== 'cut' ? { transition: s.transition as never } : {}) })),
   });
+
+  /** Everything made so far (direction, lib, finished scenes), for --resume-partial after a crash or a stop. */
+  const checkpoint = (error = '') => writeFileSync(f('partial.json'), JSON.stringify({ error, direction: d, lib, score, scenes, usage: summarizeUsage(usage) }, null, 2));
 
   /** Review the run and store what it teaches (never fails the run). */
   const review = async (failure?: string) => {
@@ -294,11 +337,12 @@ export async function invent(llm: LLM, o: InventOptions) {
   const browser = await launch();
   try {
     const res = await body();
+    if (existsSync(f('partial.json'))) rmSync(f('partial.json'));
     await review();
     return res;
   } catch (e) {
     // keep everything made so far (direction, code, scores) so a run can be resumed or inspected
-    writeFileSync(f('partial.json'), JSON.stringify({ error: String((e as Error).message ?? e), direction: d, lib, score, scenes, usage: summarizeUsage(usage) }, null, 2));
+    checkpoint(String((e as Error).message ?? e));
     log(`  saved partial results to ${f('partial.json')}`);
     await review(String((e as Error).message ?? e).slice(0, 400));
     throw e;
@@ -313,7 +357,10 @@ export async function invent(llm: LLM, o: InventOptions) {
       const v = validatePlan(input);
       if (!v.ok) return { problems: v.errors.map(e => `${e.path}: ${e.message}`) };
       for (const c of codeForFacts) for (const n of unverifiedNumbers(c, corpus, allowed)) problems.push(`${n}, which is not in the brief or the brand facts; show only the on-screen text from the direction`);
-      const reel = await openReel(v.plan, browser);
+      return renderSlot(() => probePlan(v.plan, input, problems));
+    };
+    const probePlan = async (plan: Plan, input: PlanInput, problems: string[]): Promise<{ plan?: Plan; problems: string[] }> => {
+      const reel = await openReel(plan, browser);
       try {
         const res = await reel.page.evaluate(async secs => {
           const R = window.__reel!;
@@ -335,7 +382,7 @@ export async function invent(llm: LLM, o: InventOptions) {
           if (ps.every(p => p.std < 0.012)) problems.push(`${reel.sections[k].technique}: every sampled frame is a flat colour; nothing visible is drawn`);
         });
         if (res.audio) problems.push(`the soundtrack failed to render: ${res.audio}`);
-        return { plan: v.plan, problems };
+        return { plan, problems };
       } finally {
         await reel.page.context().close();
       }
@@ -401,7 +448,8 @@ export async function invent(llm: LLM, o: InventOptions) {
       return null;
     };
     /** Render a scene's clip (what the critic watches) and measure coverage and motion on the same frames. */
-    const clipOf = async (i: number, input: PlanInput): Promise<{ clip: Buffer; m: MotionReport; beat: ReturnType<typeof beatReport>; detail?: Detail }> => {
+    const clipOf = (i: number, input: PlanInput) => renderSlot(() => clipOfNow(i, input));
+    const clipOfNow = async (i: number, input: PlanInput): Promise<{ clip: Buffer; m: MotionReport; beat: ReturnType<typeof beatReport>; detail?: Detail }> => {
       const v = validatePlan(input);
       if (!v.ok) throw new Error('clip of an invalid plan');
       const reel = await openReel(v.plan, browser);
@@ -432,7 +480,7 @@ export async function invent(llm: LLM, o: InventOptions) {
       }
     };
     /** Replicate mode: the reference segment this scene must match, shown to the coder. */
-    const stillsCache = new Map<number, Promise<{ t: number; jpg: Buffer }[]>>();
+    const stillsCache = new Map<number, Promise<{ t: number; jpg: Buffer; colours: string }[]>>();
     const refTarget = async (i: number): Promise<Part[]> => {
       const clip = o.reference?.clips?.[i];
       if (!clip) return [];
@@ -444,7 +492,7 @@ export async function invent(llm: LLM, o: InventOptions) {
       if (exact && src && win) {
         if (!stillsCache.has(i)) stillsCache.set(i, referenceStills(src.file, win.from, win.to).catch(() => []));
         const stills = await stillsCache.get(i)!;
-        if (stills.length) parts.push(text('SHARP STILLS OF THE TARGET (match every small detail: gaps between elements, corner radii, glow size and softness, shadows, text size, weight and spacing):'), ...stills.flatMap(s => [text(`t=${s.t.toFixed(2)} s from the scene start`), image(s.jpg, 'image/jpeg')]));
+        if (stills.length) parts.push(text('SHARP STILLS OF THE TARGET (match every small detail: gaps between elements, corner radii, glow size and softness, shadows, text size, weight and spacing). Each comes with its colours measured from the pixels: use those hex values, not colours you remember for the brand:'), ...stills.flatMap(s => [text(`t=${s.t.toFixed(2)} s from the scene start · measured colours: ${s.colours}`), image(s.jpg, 'image/jpeg')]));
       }
       return parts;
     };
@@ -470,6 +518,14 @@ export async function invent(llm: LLM, o: InventOptions) {
     const measured = (m: MotionReport, b?: ReturnType<typeof beatReport>) =>
       `MEASURED ON THE RENDER (objective): average frame coverage ${Math.round(m.coverage * 100)}%, empty frames ${Math.round(m.emptyShare * 100)}%, mean motion ${(m.motion * 1000).toFixed(1)}‰ per 1/12 s${b ? `, beat precision ${Math.round(b.sync * 100)}% of ${b.hardChanges} hard changes on the 16th grid` : ''}${m.flags.length ? `\nProblems: ${m.flags.join(' ')}` : ' (no measured problems)'}`;
     const critique = async (i: number, cm: { clip: Buffer; m: MotionReport; beat?: ReturnType<typeof beatReport>; detail?: Detail }, tag: string) => {
+      if (quick && cm.detail?.ssim !== undefined) {
+        // quick exact copy: the measurement is the score, the detail review the fixes (one model call, not two)
+        const ssim = cm.detail.ssim;
+        const c: SceneCritique = { scores: {} as SceneCritique['scores'], observed: `measured fidelity ${ssim.toFixed(3)} (SSIM of every frame against the reference; 1 = identical)`, fixes: await detailReview(i, cm.detail, tag) };
+        const s = Math.round(ssim * 100) / 10;
+        sceneEvidence(ev, d.scenes[i].id, d.scenes[i].idea).versions.push({ step: tag, score: s, ssim, observed: c.observed, fixes: c.fixes.slice(0, 6).map(x => String(x).slice(0, 300)) });
+        return { c, s, clip: cm.clip, detail: cm.detail };
+      }
       const refClip = o.reference?.clips?.[i];
       const [c, details] = await Promise.all([
         ask<SceneCritique>(criticLLM, `critique ${d.scenes[i].id} ${tag}`, sceneCriticSystem(), [
@@ -513,8 +569,10 @@ export async function invent(llm: LLM, o: InventOptions) {
      * clearly moves the copy away from the reference.
      */
     const better = async (i: number, cur: { score: number; clip: Buffer; detail?: Detail }, next: { score: number; clip: Buffer; detail?: Detail }, tag: string) => {
-      const v = await pairwise(i, cur.clip, next.clip, tag);
       const a = cur.detail?.ssim, b = next.detail?.ssim;
+      // quick exact copy: the measurement decides, no judging calls
+      if (quick) return a !== undefined && b !== undefined ? b > a + 0.002 : next.score > cur.score;
+      const v = await pairwise(i, cur.clip, next.clip, tag);
       const gain = a !== undefined && b !== undefined ? b - a : 0;
       if (gain < -0.02) return false;
       return v === 'next' || (v === 'tie' && (next.score >= cur.score + 0.5 || gain > 0.005));
@@ -527,7 +585,7 @@ export async function invent(llm: LLM, o: InventOptions) {
       ? [text(`DETAIL COMPARISON OF YOUR CURRENT VERSION WITH THE REFERENCE (fix every difference you see here, however small)\n${dt.report}`), ...dt.images.flatMap(im => [text(im.label), image(im.jpg, 'image/jpeg')])]
       : []);
     const fromCurrent = !!o.resume && !o.resume.fresh;
-    log(`3/6 scenes: ${fromCurrent ? 'the current version' : `${o.candidates ?? 2} candidates`} each, then up to ${o.rounds ?? 2} watch → rewrite rounds`);
+    log(`3/6 scenes: ${fromCurrent ? 'the current version' : `${nCands} candidate${nCands > 1 ? 's' : ''}`} each, then up to ${nRounds} watch → rewrite round${nRounds === 1 ? '' : 's'}${quick ? ` (quick: kept only if it measures closer to the reference; ${Math.min(conc, d.scenes.length)} scenes at once)` : ''}`);
     const todo = o.resume ? d.scenes.filter(s => o.resume!.only.includes(s.id)) : o.partial ? d.scenes.filter((_, i) => !scenes[i].draw.trim()) : d.scenes;
     await pool(todo, conc, async s => {
       const i = d.scenes.indexOf(s);
@@ -538,7 +596,7 @@ export async function invent(llm: LLM, o: InventOptions) {
             history[s.id].push({ step: 'current', score: cr.s });
             return { code: scenes[i], score: cr.s, critique: cr.c, clip: cr.clip, detail: cr.detail };
           })()]
-        : await Promise.all(Array.from({ length: o.candidates ?? 2 }, (_, k) => attempt(`${s.id} candidate ${k + 1}`, async () => {
+        : await Promise.all(Array.from({ length: nCands }, (_, k) => attempt(`${s.id} candidate ${k + 1}`, async () => {
         const r = await ask<SceneCode>(codeLLM, `code ${s.id} #${k + 1}`, coder(), [sceneUser(d, lib, i, bpm) + refNote + L('coder', sceneTask(i)) + (k ?`\n\n(Candidate ${k + 1}: take a clearly different creative approach to the same brief.)` : ''), ...(await refTarget(i))], sceneSchema(), 'high');
         const ok = await testFix(i, cleanScene(r), `#${k + 1}`);
         if (!ok) return null;
@@ -567,7 +625,7 @@ export async function invent(llm: LLM, o: InventOptions) {
       const fid = (x?: Detail) => (x?.ssim !== undefined ? ` (fidelity ${x.ssim.toFixed(3)})` : '');
       log(`  ${s.id}: candidates ${good.map(g => g.score).join(' / ')} → kept ${cur.score}${fid(cur.detail)}`);
       for (const v of sceneEvidence(ev, s.id, s.idea).versions) if (v.kept === undefined) v.kept = v.score === cur.score;
-      for (let r = 1; r <= (o.rounds ?? 2) && cur.score < target && !overBudget(); r++) {
+      for (let r = 1; r <= nRounds && cur.score < target && !overBudget(); r++) {
         const done = await attempt(`${s.id} rewrite ${r}`, async () => {
           const rw = await ask<SceneCode>(codeLLM, `rewrite ${s.id} · ${r}`, coder(), [
             rewriteUser(d, lib, i, bpm, cur.code, cur.critique, cur.score) + refNote + L('coder', `${sceneTask(i)} ${cur.critique.fixes.join(' ')}`),
@@ -590,6 +648,7 @@ export async function invent(llm: LLM, o: InventOptions) {
       }
       best[i] = cur;
       scenes[i] = cur.code;
+      checkpoint();
     });
     writeFileSync(f('scores.json'), JSON.stringify(history, null, 2));
 
@@ -616,7 +675,7 @@ export async function invent(llm: LLM, o: InventOptions) {
     };
     let plan = await whole();
     const films: FilmCritique[] = [];
-    for (let r = 1; r <= (o.filmRounds ?? 1) && !overBudget(); r++) {
+    for (let r = 1; r <= nFilmRounds && !overBudget(); r++) {
       log(`5/6 film review ${r} (video with sound)`);
       const reel = await openReel(plan, browser);
       const [filmClip] = await renderClips(reel, [{ from: 0, to: reel.duration }], { width: 640, fps: 24, audio: true });

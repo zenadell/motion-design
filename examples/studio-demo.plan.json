@@ -1,0 +1,402 @@
+{
+ "version": 1,
+ "meta": {
+  "title": "Studio demo",
+  "fps": 60,
+  "hud": false,
+  "captions": false,
+  "grain": 0.04
+ },
+ "brand": {
+  "name": "Jomiez",
+  "suffix": "Innovation",
+  "tagline": "Software, web & AI systems for businesses worldwide.",
+  "site": "jomiez.com",
+  "email": "hello@jomiez.com",
+  "colors": {
+   "bg": "#0B0C0F",
+   "text": "#F1EFED",
+   "primary": "#F63C0C",
+   "secondary": "#FE812E",
+   "surface": "#16171B",
+   "muted": "#B3B8B5",
+   "accent": "#D8FF3A"
+  },
+  "fonts": {
+   "display": "Plus Jakarta Sans",
+   "mono": "JetBrains Mono"
+  },
+  "logo": {
+   "d": "M212 158.8 L322 158.8 A26 26 0 0 1 348 184.8 L348 199.87 A48 48 0 0 1 334.24 233.51 L269.6 299.3 L323 299.3 A22.05 22.05 0 0 1 323 343.4 L204.8 343.4 A47.2 47.2 0 0 1 204.8 249 L204.8 295.4 A4 4 0 0 0 211.64 298.22 L299.52 209.82 A4 4 0 0 0 296.68 203 L177.46 203 A4 4 0 0 1 174.63 196.17 Z"
+  },
+  "tile": true
+ },
+ "music": {
+  "bpm": 120,
+  "genre": "afro-house"
+ },
+ "sections": [
+  {
+   "technique": "comp:launch",
+   "beats": 8,
+   "energy": 2
+  },
+  {
+   "technique": "end-card",
+   "beats": 6,
+   "transition": "fade"
+  }
+ ],
+ "studio": {
+  "comps": [
+   {
+    "id": "launch",
+    "title": "Studio demo",
+    "units": "beats",
+    "camera": {
+     "position": [
+      {
+       "t": 0,
+       "v": [
+        960,
+        540
+       ]
+      },
+      {
+       "t": 8,
+       "v": [
+        1010,
+        520
+       ],
+       "ease": "inOutCubic"
+      }
+     ],
+     "zoom": [
+      {
+       "t": 0,
+       "v": 1
+      },
+      {
+       "t": 7.5,
+       "v": 1
+      },
+      {
+       "t": 8,
+       "v": 1.06,
+       "ease": "outExpo"
+      }
+     ],
+     "z": [
+      {
+       "t": 0,
+       "v": -120
+      },
+      {
+       "t": 4,
+       "v": 0,
+       "ease": "outQuint"
+      }
+     ]
+    },
+    "layers": [
+     {
+      "id": "plate",
+      "type": "rect",
+      "size": [
+       1920,
+       1080
+      ],
+      "fill": {
+       "type": "radial",
+       "from": [
+        960,
+        540
+       ],
+       "to": [
+        960,
+        1500
+       ],
+       "stops": [
+        [
+         0,
+         "surface"
+        ],
+        [
+         1,
+         "bg"
+        ]
+       ]
+      }
+     },
+     {
+      "id": "grid-a",
+      "type": "ellipse",
+      "position": [
+       420,
+       300
+      ],
+      "size": [
+       260,
+       260
+      ],
+      "fill": "#F63C0C33",
+      "blur": 30,
+      "z": 400
+     },
+     {
+      "id": "grid-b",
+      "type": "ellipse",
+      "position": [
+       1500,
+       820
+      ],
+      "size": [
+       360,
+       360
+      ],
+      "fill": "#FE812E26",
+      "blur": 40,
+      "z": 300
+     },
+     {
+      "id": "ring",
+      "type": "ellipse",
+      "position": [
+       960,
+       540
+      ],
+      "size": [
+       620,
+       620
+      ],
+      "stroke": {
+       "color": "primary",
+       "width": 6,
+       "cap": "round"
+      },
+      "trim": {
+       "end": [
+        {
+         "t": 0,
+         "v": 0
+        },
+        {
+         "t": 2,
+         "v": 1,
+         "ease": "outExpo"
+        }
+       ]
+      },
+      "rotation": [
+       {
+        "t": 0,
+        "v": -90
+       },
+       {
+        "t": 8,
+        "v": 30
+       }
+      ],
+      "glow": {
+       "color": "primary",
+       "radius": 30
+      }
+     },
+     {
+      "id": "title",
+      "type": "text",
+      "text": "MOTION STUDIO",
+      "size": 140,
+      "weight": 800,
+      "tracking": [
+       {
+        "t": 0,
+        "v": 0.3
+       },
+       {
+        "t": 4,
+        "v": 0.02,
+        "ease": "outExpo"
+       }
+      ],
+      "position": [
+       960,
+       500
+      ],
+      "animate": {
+       "by": "char",
+       "start": 0.5,
+       "duration": 1,
+       "stagger": 0.06,
+       "ease": {
+        "spring": {
+         "stiffness": 220,
+         "damping": 14
+        }
+       },
+       "from": {
+        "opacity": 0,
+        "y": 80,
+        "rotation": 8,
+        "blur": 12
+       },
+       "mask": true
+      }
+     },
+     {
+      "id": "wipe",
+      "type": "rect",
+      "position": [
+       {
+        "t": 1,
+        "v": [
+         560,
+         640
+        ]
+       },
+       {
+        "t": 2.5,
+        "v": [
+         1360,
+         640
+        ],
+        "ease": "inOutExpo"
+       }
+      ],
+      "size": [
+       820,
+       90
+      ]
+     },
+     {
+      "id": "sub",
+      "type": "text",
+      "text": "every layer, every keyframe",
+      "size": 46,
+      "weight": 500,
+      "font": "mono",
+      "color": "accent",
+      "position": [
+       960,
+       640
+      ],
+      "matte": {
+       "layer": "wipe"
+      }
+     },
+     {
+      "id": "card",
+      "type": "image",
+      "src": "asset:card",
+      "position": [
+       {
+        "t": 3,
+        "v": [
+         1560,
+         1260
+        ]
+       },
+       {
+        "t": 4.5,
+        "v": [
+         1560,
+         850
+        ],
+        "ease": {
+         "spring": {
+          "stiffness": 180,
+          "damping": 12
+         }
+        }
+       }
+      ],
+      "rotation": -6,
+      "shadow": {
+       "blur": 40,
+       "y": 20
+      },
+      "z": -80
+     },
+     {
+      "id": "badge",
+      "type": "logo",
+      "size": [
+       {
+        "t": 2,
+        "v": 0
+       },
+       {
+        "t": 3,
+        "v": 110,
+        "ease": "outBack"
+       }
+      ],
+      "position": [
+       300,
+       860
+      ],
+      "tile": true,
+      "z": -60
+     },
+     {
+      "id": "fx",
+      "type": "technique",
+      "technique": "glitch-word",
+      "params": {
+       "word": "WOW"
+      },
+      "start": 5,
+      "in": 5,
+      "out": 8,
+      "scale": 0.45,
+      "position": [
+       960,
+       250
+      ],
+      "blend": "lighten"
+     },
+     {
+      "id": "dots",
+      "type": "code",
+      "draw": "for (let i = 0; i < 24; i++) { const a = i / 24 * S.TAU + t * 0.6; g.fillStyle = S.rgba(S.colors.accent, 0.8); g.beginPath(); g.arc(960 + Math.cos(a) * 380, 540 + Math.sin(a) * 380, 5, 0, S.TAU); g.fill(); }",
+      "opacity": [
+       {
+        "t": 1.5,
+        "v": 0
+       },
+       {
+        "t": 2.5,
+        "v": 1
+       }
+      ],
+      "fixed": true
+     }
+    ],
+    "hits": [
+     {
+      "t": 0.5,
+      "shake": 6
+     }
+    ],
+    "sounds": [
+     {
+      "t": 0.4,
+      "sound": "whoosh",
+      "duration": 0.6
+     },
+     {
+      "t": 1,
+      "sound": "impact"
+     },
+     {
+      "t": 3.6,
+      "sound": "pop"
+     }
+    ]
+   }
+  ],
+  "assets": {
+   "card": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMjAiIGhlaWdodD0iMjAwIj48cmVjdCB4PSI0IiB5PSI0IiB3aWR0aD0iMzEyIiBoZWlnaHQ9IjE5MiIgcng9IjI4IiBmaWxsPSIjMTYxNzFCIiBzdHJva2U9IiNGNjNDMEMiIHN0cm9rZS13aWR0aD0iNCIvPjxjaXJjbGUgY3g9IjcwIiBjeT0iNzAiIHI9IjI4IiBmaWxsPSIjRkU4MTJFIi8+PHJlY3QgeD0iMTE4IiB5PSI1MiIgd2lkdGg9IjE2MCIgaGVpZ2h0PSIxNiIgcng9IjgiIGZpbGw9IiNGMUVGRUQiLz48cmVjdCB4PSIxMTgiIHk9IjgwIiB3aWR0aD0iMTEwIiBoZWlnaHQ9IjEyIiByeD0iNiIgZmlsbD0iI0IzQjhCNSIvPjxyZWN0IHg9IjMyIiB5PSIxMjgiIHdpZHRoPSIyNTYiIGhlaWdodD0iNDAiIHJ4PSIyMCIgZmlsbD0iI0Y2M0MwQyIvPjwvc3ZnPg=="
+  }
+ }
+}

@@ -75,7 +75,7 @@ export function checkCustom(c: Custom | undefined): { path: string; message: str
   return out;
 }
 
-function seededMath(seed: number): Math {
+export function seededMath(seed: number): Math {
   const M = Object.create(Math) as Math & { random: () => number };
   let s = (Math.floor(seed * 1000) ^ 0x9e3779b9) >>> 0;
   M.random = () => {
@@ -125,7 +125,7 @@ export interface StageBase {
 
 const layers = new Map<string, [HTMLCanvasElement, G]>();
 /** A cleared offscreen canvas, reused per key and size. */
-function layerOf(key: string, w = W, h = H): { canvas: HTMLCanvasElement; g: G } {
+export function layerOf(key: string, w = W, h = H): { canvas: HTMLCanvasElement; g: G } {
   const k = `${key}:${w}x${h}`;
   let e = layers.get(k);
   if (!e) {
@@ -156,7 +156,7 @@ function three3d(c: Ctx) {
   return api3d;
 }
 
-function baseStage(c: Ctx): StageBase {
+export function baseStage(c: Ctx): StageBase {
   const T = c.theme, L = c.brand.logo;
   const lazy3d = new Proxy({}, { get: (_t, k) => (three3d(c) as Record<string | symbol, unknown>)[k] });
   return {

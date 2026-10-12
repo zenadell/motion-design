@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { DeepSeek } from '../src/ai/deepseek';
 import { costOf, summarizeUsage, user, video } from '../src/ai/llm';
 import { isOpenRouterId } from '../src/ai/models';
 import { OpenRouter, requestBody } from '../src/ai/openrouter';
@@ -74,5 +75,19 @@ describe('OpenRouter client', () => {
     expect(r.text).toBe('{"a":1}');
     expect((calls[0].body.response_format as { type: string }).type).toBe('json_schema');
     expect((calls[1].body.response_format as { type: string }).type).toBe('json_object');
+  });
+});
+
+describe('DeepSeek client', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('stops at once when the account is out of credit, with the way to continue', async () => {
+    const { f, calls } = fake(new Response('{"error":{"message":"Insufficient Balance"}}', { status: 402 }), reply('{}'));
+    vi.stubGlobal('fetch', f);
+    const m = new DeepSeek({ model: 'deepseek-flash', apiKey: 'k' });
+    const e = await m.json({ label: 'x', system: 's', turns: [user('hi')] }).catch(x => x);
+    expect(e.status).toBe(402);
+    expect(e.message).toMatch(/out of credit.*resume-partial/);
+    expect(calls).toHaveLength(1);
   });
 });

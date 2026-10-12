@@ -75,3 +75,16 @@ describe('colour', () => {
     expect(mixHex('#000000', '#FFFFFF', 0.5)).toBe('#808080');
   });
 });
+
+describe('fast canvas blur', () => {
+  it('knows how far a filter spreads a draw, and when not to clip', async () => {
+    const { filterReach } = await import('../src/engine/core/fast-filter');
+    expect(filterReach('none')).toBeUndefined();
+    expect(filterReach('brightness(1.2)')).toBeUndefined();
+    expect(filterReach('blur(10px)')).toBe(34);
+    expect(filterReach('blur(4px) brightness(1.1)')).toBe(16);
+    // offsets and external filters can reach anywhere: never clipped
+    expect(filterReach('blur(4px) drop-shadow(0 20px 10px #000)')).toBeUndefined();
+    expect(filterReach('url(#f)')).toBeUndefined();
+  });
+});

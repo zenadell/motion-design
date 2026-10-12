@@ -8,6 +8,7 @@ import { runAi } from './ai';
 import { gallery } from './gallery';
 import { buildHtml } from './html';
 import { autoTimes, renderAudio, renderVideo } from './render';
+import { STUDIO_HELP, runStudio } from './studio';
 
 const HELP = `motion — beat-synced motion design from a JSON plan
 
@@ -48,7 +49,9 @@ runs through OpenRouter instead and needs OPENROUTER_API_KEY; --model, --code-mo
                                                  also writes video-compare.mp4 (reference | copy);
                                                  --plan-only stops after breakdown.json and direction.json,
                                                  --reuse-plan rebuilds from them, --resume-partial continues a run
-                                                 that stopped (keeps its finished scenes)
+                                                 that stopped (keeps its finished scenes); quick by default: one
+                                                 draft a scene, one rewrite kept only if it measures closer, scenes
+                                                 in parallel; --thorough adds rival drafts and model-judged rounds
   motion brand    <url> [--logo mark.svg] [-o brand.json]
                                                  extract colours, fonts, facts and the logo mark
   motion plan     --brand brand.json --brief "..." [--seconds 20] [--genre g] [--effort low|medium|high] [-o plan.json]
@@ -72,7 +75,7 @@ and review the run afterwards to store new ones (lessons/lessons.json, or --less
   --brief accepts @file.txt · --replay replies.json plays back recorded model replies (tests, no key)
 `;
 
-const VALUE_FLAGS = ['at', 'crf', 'workers', 'blur', 'from', 'to', 'only', 'brand', 'brief', 'seconds', 'bpm', 'genre', 'model', 'logo', 'effort', 'qa', 'mark', 'replay', 'candidates', 'rounds', 'film-rounds', 'budget', 'target', 'code-model', 'critic-model', 'bar-video', 'bar-code', 'feedback', 'scenes', 'models', 'filter', 'parallel', 'lessons', 'remove', 'reference'];
+const VALUE_FLAGS = ['at', 'crf', 'workers', 'blur', 'from', 'to', 'only', 'brand', 'brief', 'seconds', 'bpm', 'genre', 'model', 'logo', 'effort', 'qa', 'mark', 'replay', 'candidates', 'rounds', 'film-rounds', 'budget', 'target', 'code-model', 'critic-model', 'bar-video', 'bar-code', 'feedback', 'scenes', 'models', 'filter', 'parallel', 'lessons', 'remove', 'reference', 'fps', 'comp', 'steps', 'plan', 'quad'];
 
 function parse(argv: string[]) {
   const pos: string[] = [], flags: Record<string, string | true> = {};
@@ -189,9 +192,12 @@ async function main(): Promise<void> {
       }
       return;
     }
+    case 'studio':
+      await runStudio(pos, flags);
+      return;
     default:
       if (cmd && (await runAi(cmd, pos, flags))) return;
-      process.stdout.write(HELP);
+      process.stdout.write(HELP + '\n' + STUDIO_HELP);
       if (cmd && cmd !== 'help' && cmd !== '--help' && cmd !== '-h') process.exit(1);
   }
 }

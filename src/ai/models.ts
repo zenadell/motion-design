@@ -1,3 +1,4 @@
+import { DeepSeek, isDeepSeekId } from './deepseek';
 import { Gemini } from './gemini';
 import type { LLM } from './llm';
 import { OpenRouter } from './openrouter';
@@ -8,6 +9,7 @@ import { OpenRouter } from './openrouter';
  * through OpenRouter; bare ids ("gemini-3.8-flash") go to Gemini directly.
  */
 export function llmFor(id: string | undefined, log?: (s: string) => void): LLM {
+  if (isDeepSeekId(id)) return new DeepSeek({ model: id!, log });
   if (id?.includes('/')) return new OpenRouter({ model: id, log });
   return new Gemini({ model: id, log });
 }

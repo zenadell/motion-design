@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { StudioSchema } from '../studio/schema';
 import { CHORD_RE } from '../engine/audio/chords';
 import { DISPLAY_NAMES, MONO_NAMES, SERIF_NAMES } from './fonts';
 
@@ -59,7 +60,7 @@ export const TRANSITIONS = ['cut', 'blade', 'slice', 'flash', 'fade', 'slide', '
 export const TransitionSchema = z.union([
   z.enum(TRANSITIONS),
   z.object({ type: z.enum(TRANSITIONS), beats: z.number().min(0.25).max(2).default(0.5) }),
-]);
+], { error: `a transition is one of ${TRANSITIONS.join(', ')}, or { "type": one of those, "beats": 0.25–2 }` });
 
 export const SectionSchema = z.object({
   id: z.string().max(40).optional(),
@@ -110,6 +111,8 @@ export const PlanSchema = z.object({
   music: MusicSchema.prefault({}),
   sections: z.array(SectionSchema).min(1).max(40),
   custom: CustomSchema.optional(),
+  /** Layer-and-keyframe comps (src/studio); a section plays one with technique "comp:<id>". */
+  studio: StudioSchema.optional(),
 });
 
 export type PlanInput = z.input<typeof PlanSchema>;
