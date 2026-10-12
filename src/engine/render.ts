@@ -97,6 +97,17 @@ export function createEngine(plan: Plan): Engine {
   const cuts = secs.slice(1).filter(s => !secs[s.index - 1].transition).map(s => s.start);
 
   const [L1, g1] = makeLayer(), [L2, g2] = makeLayer(), [SUB, gSub] = makeLayer();
+  // two thumbnails to tell a frame that holds still (its motion-blur samples would all be the same picture)
+  const [, tA] = makeLayer(192, 108), [, tB] = makeLayer(192, 108);
+  const still = (a: CanvasImageSource, b: CanvasImageSource): boolean => {
+    tA.clearRect(0, 0, 192, 108);
+    tB.clearRect(0, 0, 192, 108);
+    tA.drawImage(a, 0, 0, 192, 108);
+    tB.drawImage(b, 0, 0, 192, 108);
+    const x = tA.getImageData(0, 0, 192, 108).data, y = tB.getImageData(0, 0, 192, 108).data;
+    for (let k = 0; k < x.length; k++) if (Math.abs(x[k] - y[k]) > 3) return false;
+    return true;
+  };
   const erred = new Set<number>();
   // HUD chapters: consecutive sections that share a label share a number.
   const chapter: number[] = [], chapterStart: number[] = [];
@@ -238,13 +249,18 @@ export function createEngine(plan: Plan): Engine {
       g.setTransform(1, 0, 0, 1, 0, 0);
       let n = 0;
       const w = window as unknown as { __motion3d?: number };
-      for (let k = 0; k < sub; k++) {
+      // the first and the last sample first: when they show the same picture the frame holds still,
+      // and the samples between are skipped (a held frame costs 2 draws, not `sub`)
+      const order = sub > 2 ? [0, sub - 1, ...Array.from({ length: sub - 2 }, (_, j) => j + 1)] : Array.from({ length: sub }, (_, j) => j);
+      for (const k of order) {
+        if (k >= sub) break;
         const ts = Math.min(t + (shutter * k) / sub, D - 1e-4);
         if (cuts.some(c => t < c && ts >= c)) continue;
         const before = w.__motion3d ?? 0;
         drawScene(gSub, ts);
         // software WebGL is costly (0.2–0.8 s a frame): frames that draw real 3D take one sample, no blur
         if (k === 0 && (w.__motion3d ?? 0) !== before) sub = 1;
+        if (k === sub - 1 && n === 1 && still(g.canvas, SUB)) break;
         g.globalAlpha = 1 / ++n;
         g.drawImage(SUB, 0, 0);
       }

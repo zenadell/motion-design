@@ -207,7 +207,9 @@ motion replicate reference.mp4 --brand out/brand.json --brief "Our launch film" 
 motion replicate clip.mp4 --exact --model deepseek/deepseek-v4.1-flash --critic-model google/gemini-3.8-flash -o out/copy
 ```
 
-In exact mode each scene's idea ends with its shot's slice of the frame log, as ground truth for the coder and the critics.
+In exact mode each scene's idea ends with its shot's slice of the frame log, as ground truth for the coder and the critics. Every still the models see carries its colours measured from the pixels (a 3×3 grid of mean colours and the most common colours), so they copy the reference's real colours instead of the brand colours they remember. Scene lengths come from the shot times on the quarter-beat grid, counted from the film start, so the copy cuts where the reference cuts.
+
+**Quick by default.** An exact copy has an objective score, its fidelity (SSIM against the reference), so it does not need models to judge drafts against each other. By default each scene gets one draft, measured and reviewed once for its differences, and one rewrite that is kept only if it measures closer. Up to 12 scenes are in flight at once while renders take turns on the CPU, and there is no whole-film review round. That is about 6 model calls a scene instead of about 20. `--thorough` brings back the rival drafts, model-judged head-to-heads, a second rewrite round and the film review.
 
 **The detail inspector.** A critic watching a 640-px clip judges the overall impression. It misses the small things that separate a copy from the original: an 8-px gutter between cards, a glow five times too big, a pop-in that should bounce. So in exact mode every render is also measured against its reference segment on matched frames:
 

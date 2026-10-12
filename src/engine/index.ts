@@ -1,6 +1,7 @@
 // Browser entry point: window.MotionEngine.boot({ plan, land }).
 import { formatIssues, validatePlan } from '../plan/validate';
 import { setLand } from './assets/land';
+import { installFastFilter } from './core/fast-filter';
 import { startPlayer } from './player';
 import { createEngine } from './render';
 import { preloadStudio } from '../studio/render';
@@ -27,6 +28,7 @@ async function boot(opts: BootOptions): Promise<void> {
   }
   if (res.warnings.length) console.warn(`[motion] plan warnings:\n${formatIssues(res.warnings)}`);
   setLand(opts.land);
+  installFastFilter();
   const f = res.plan.brand.fonts;
   await Promise.all([
     document.fonts.load(`800 100px "${f.display}"`),

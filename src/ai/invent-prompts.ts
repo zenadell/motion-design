@@ -366,7 +366,7 @@ ${code.draw}
 --- sfx ---
 ${code.sfx}
 
-REVIEW OF THE CLIP ABOVE (${score}/10; ${RUBRIC.map(k => `${k} ${c.scores?.[k] ?? '?'}`).join(', ')})
+REVIEW OF THE CLIP ABOVE (${score}/10${Object.keys(c.scores ?? {}).length ? `; ${RUBRIC.map(k => `${k} ${c.scores?.[k] ?? '?'}`).join(', ')}` : ''})
 What the reviewer saw: ${c.observed}
 Fixes, most important first:
 ${c.fixes.map((f, k) => `${k + 1}. ${f}`).join('\n')}

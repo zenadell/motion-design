@@ -172,3 +172,28 @@ describe('3D support', () => {
     delete process.env.MOTION_THREE_PATH;
   });
 });
+
+describe('slots', () => {
+  it('runs at most n tasks at once and all of them in the end', async () => {
+    const { slots } = await import('../src/ai/invent');
+    const slot = slots(3);
+    let running = 0, peak = 0;
+    const task = (k: number) => slot(async () => {
+      running++;
+      peak = Math.max(peak, running);
+      await new Promise(r => setTimeout(r, 5 + (k % 3)));
+      running--;
+      return k;
+    });
+    const out = await Promise.all(Array.from({ length: 10 }, (_, k) => task(k)));
+    expect(out).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    expect(peak).toBe(3);
+  });
+
+  it('frees its slot when a task fails', async () => {
+    const { slots } = await import('../src/ai/invent');
+    const slot = slots(1);
+    await expect(slot(async () => { throw new Error('x'); })).rejects.toThrow('x');
+    expect(await slot(async () => 7)).toBe(7);
+  });
+});
