@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Browser } from 'playwright';
 import { dataUrlToBuffer, launch, openReel } from '../cli/browser';
@@ -12,7 +12,7 @@ import { factCorpus, type BrandKit } from './brand-kit';
 import { inspectScene, referenceStills, type Detail } from './inspect';
 import { learn, newEvidence, sceneEvidence, type Lessons, type Role } from './lessons';
 import { beatReport, motionReport, type MotionReport } from './metrics';
-import { image, parseJson, summarizeUsage, text, user, video, type Effort, type LLM, type Part, type Usage } from './llm';
+import { image, LLMError, parseJson, summarizeUsage, text, user, video, type Effort, type LLM, type Part, type Usage } from './llm';
 import {
   coderSystem, conceptsSchema, conceptsUser, critiqueScore, detailCriticSystem, detailSchema, developUser, directionSchema, directorSystem, directorUser, filmCriticSchema, filmCriticSystem, fixUser, libSchema, libUser,
   pairSchema, pairSystem, pickSchema, pickSystem, type Concept,
@@ -148,6 +148,9 @@ export function directionProblems(d: Partial<Direction> | undefined): string[] {
   return out;
 }
 
+/** An error no retry or other scene can get past: the model account is out of credit or the key is refused. */
+const accountError = (e: unknown) => e instanceof LLMError && (e.status === 401 || e.status === 402);
+
 export async function invent(llm: LLM, o: InventOptions) {
   const log = o.log ?? (() => {});
   const codeLLM = o.codeLLM ?? llm, criticLLM = o.criticLLM ?? llm;
@@ -195,6 +198,8 @@ export async function invent(llm: LLM, o: InventOptions) {
     try {
       return await f();
     } catch (e) {
+      // no credit or a bad key fails every later call too: stop now, keeping what is finished
+      if (accountError(e)) throw e;
       log(`    ${what} failed, skipped: ${String((e as Error).message ?? e).slice(0, 160)}`);
       return null;
     }
@@ -225,14 +230,18 @@ export async function invent(llm: LLM, o: InventOptions) {
   const bpm = Math.min(140, Math.max(90, o.bpm ?? d.sound?.bpm ?? 120));
   const targetBeats = Math.round(((seconds * bpm) / 60) * 2) / 2;
   const ids = new Set<string>();
-  d.scenes = d.scenes.slice(0, 12).map((s, i) => {
+  // an exact copy has one scene per reference shot, however many; its scene lengths are the shots' own
+  const exactShots = !!o.reference?.exact && !!o.reference.source;
+  d.scenes = d.scenes.slice(0, exactShots ? 40 : 12).map((s, i) => {
     let id = (s.id || `scene-${i + 1}`).toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^[^a-z]+/, '').slice(0, 32) || `scene-${i + 1}`;
     while (ids.has(id)) id = `${id.slice(0, 29)}-${i}`;
     ids.add(id);
     return { ...s, id, onscreenText: s.onscreenText ?? [] };
   });
-  const fitted = fitScenes(d.scenes.map(s => s.beats), targetBeats);
-  d.scenes.forEach((s, i) => (s.beats = fitted[i]));
+  if (!exactShots) {
+    const fitted = fitScenes(d.scenes.map(s => s.beats), targetBeats);
+    d.scenes.forEach((s, i) => (s.beats = fitted[i]));
+  }
   writeFileSync(f('direction.json'), JSON.stringify(d, null, 2));
   log(`  "${d.title}" — ${d.concept}`);
   log(`  ${d.scenes.length} scenes · ${bpm} BPM · ${d.look.display}${d.look.serif ? ` + ${d.look.serif}` : ''} · ${d.vibe.join(', ')}`);
@@ -274,6 +283,9 @@ export async function invent(llm: LLM, o: InventOptions) {
     sections: d.scenes.map((s, i) => ({ technique: `scene:${s.id}`, beats: s.beats, ...(i < d.scenes.length - 1 && s.transition !== 'cut' ? { transition: s.transition as never } : {}) })),
   });
 
+  /** Everything made so far (direction, lib, finished scenes), for --resume-partial after a crash or a stop. */
+  const checkpoint = (error = '') => writeFileSync(f('partial.json'), JSON.stringify({ error, direction: d, lib, score, scenes, usage: summarizeUsage(usage) }, null, 2));
+
   /** Review the run and store what it teaches (never fails the run). */
   const review = async (failure?: string) => {
     const evidence = failure ? { ...ev, notes: [...(ev.notes ?? []), `the run failed: ${failure}`] } : ev;
@@ -294,11 +306,12 @@ export async function invent(llm: LLM, o: InventOptions) {
   const browser = await launch();
   try {
     const res = await body();
+    if (existsSync(f('partial.json'))) rmSync(f('partial.json'));
     await review();
     return res;
   } catch (e) {
     // keep everything made so far (direction, code, scores) so a run can be resumed or inspected
-    writeFileSync(f('partial.json'), JSON.stringify({ error: String((e as Error).message ?? e), direction: d, lib, score, scenes, usage: summarizeUsage(usage) }, null, 2));
+    checkpoint(String((e as Error).message ?? e));
     log(`  saved partial results to ${f('partial.json')}`);
     await review(String((e as Error).message ?? e).slice(0, 400));
     throw e;
@@ -590,6 +603,7 @@ export async function invent(llm: LLM, o: InventOptions) {
       }
       best[i] = cur;
       scenes[i] = cur.code;
+      checkpoint();
     });
     writeFileSync(f('scores.json'), JSON.stringify(history, null, 2));
 

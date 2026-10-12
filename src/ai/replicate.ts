@@ -194,18 +194,87 @@ ${craft}`,
   }
 }
 
+/**
+ * Exact copy: where each scene starts and ends in the reference, in seconds
+ * (n + 1 edges, 0 … dur). Every scene covers whole shots: one shot each when the
+ * counts match, else the grouping of consecutive shots that best matches the
+ * scenes, by their on-screen words first and their planned lengths second (a
+ * director that merged shots, or a scene list cut short). Undefined when the
+ * shots cannot be used (none, or fewer shots than scenes).
+ */
+export function shotEdges(bd: Breakdown, d: Direction, dur: number): number[] | undefined {
+  const shots = (bd.shots ?? []).filter(s => Number.isFinite(s?.start) && Number.isFinite(s?.end) && s.end > s.start && s.start < dur).sort((a, b) => a.start - b.start);
+  const n = d.scenes.length, m = shots.length;
+  if (!n || m < n) return undefined;
+  // shot j spans from its start to the next shot's start (the last one to the end of the film)
+  const at = (j: number) => (j === 0 ? 0 : j >= m ? dur : shots[j].start);
+  let first: number[];
+  if (m === n) first = shots.map((_, j) => j);
+  else {
+    const total = d.scenes.reduce((a, s) => a + s.beats, 0) || 1;
+    const want = d.scenes.map(s => (s.beats / total) * dur);
+    const words = (t: string[] | undefined) => new Set((t ?? []).join(' ').toLowerCase().match(/[\p{L}\p{N}]{2,}/gu) ?? []);
+    const sw = d.scenes.map(s => words(s.onscreenText)), hw = shots.map(s => words(s.text));
+    // 1 = same words (or both wordless), 0 = nothing in common
+    const sim = (i: number, j: number) => {
+      const a = sw[i], b = hw[j];
+      if (!a.size || !b.size) return a.size || b.size ? 0 : 0.5;
+      let common = 0;
+      for (const w of a) if (b.has(w)) common++;
+      return common / (a.size + b.size - common);
+    };
+    const cost = (i: number, a: number, b: number) => {
+      let c = 0.25 * Math.log(Math.max(1e-3, at(b) - at(a)) / Math.max(1e-3, want[i])) ** 2;
+      for (let j = a; j < b; j++) c += 1 - sim(i, j);
+      return c;
+    };
+    // best[i][j]: scenes 0..i-1 over shots 0..j-1; from[i][j]: where scene i-1 starts
+    const best = Array.from({ length: n + 1 }, () => new Array<number>(m + 1).fill(Infinity));
+    const from = Array.from({ length: n + 1 }, () => new Array<number>(m + 1).fill(0));
+    best[0][0] = 0;
+    for (let i = 1; i <= n; i++)
+      for (let j = i; j <= m - (n - i); j++)
+        for (let k = i - 1; k < j; k++) {
+          const c = best[i - 1][k] + cost(i - 1, k, j);
+          if (c < best[i][j]) { best[i][j] = c; from[i][j] = k; }
+        }
+    first = new Array<number>(n);
+    for (let i = n, j = m; i > 0; i--) j = first[i - 1] = from[i][j];
+  }
+  const edges = first.map(j => at(j));
+  edges.push(dur);
+  return edges.every((e, i) => i === 0 || e > edges[i - 1]) ? edges : undefined;
+}
+
 /** The reference segment of each scene: the shot times in exact mode, else in proportion to the beats. */
 export function sceneWindows(bd: Breakdown, d: Direction, dur: number, exact: boolean): { from: number; to: number }[] {
+  const edges = exact ? shotEdges(bd, d, dur) : undefined;
+  if (edges) return d.scenes.map((_, i) => ({ from: edges[i], to: edges[i + 1] }));
   const total = d.scenes.reduce((a, s) => a + s.beats, 0) || 1;
-  const shots = bd.shots ?? [];
   let acc = 0;
-  return d.scenes.map((s, i) => {
+  return d.scenes.map(s => {
     const from = (acc / total) * dur;
     acc += s.beats;
-    const sh = shots[i];
-    if (exact && shots.length === d.scenes.length && Number.isFinite(sh?.start) && sh.end > sh.start) return { from: sh.start, to: Math.min(dur, sh.end) };
     return { from, to: (acc / total) * dur };
   });
+}
+
+/**
+ * Exact copy: give each scene the length of its shots, so the copy cuts where
+ * the reference cuts. Edges go to the quarter-beat grid counted from the film
+ * start (rounding never adds up along the film); every scene keeps at least a
+ * quarter beat. Sets the scene beats and returns the scene windows.
+ */
+export function alignToShots(bd: Breakdown, d: Direction, dur: number, bpm: number): { from: number; to: number }[] {
+  const windows = sceneWindows(bd, d, dur, true);
+  const grid = (t: number) => Math.round(((t * bpm) / 60) * 4) / 4;
+  let prev = 0;
+  d.scenes.forEach((s, i) => {
+    const end = Math.max(prev + 0.25, grid(windows[i].to));
+    s.beats = end - prev;
+    prev = end;
+  });
+  return windows;
 }
 
 function loadPlan(dir: string): { breakdown: Breakdown; direction: Direction } | undefined {
@@ -268,7 +337,7 @@ export async function replicate(llm: LLM, o: ReplicateOptions) {
   d.sound = { ...(d.sound ?? { description: bd.sound }), bpm };
   if (o.exact) d.exact = true;
   const shots = bd.shots ?? [];
-  const windows = sceneWindows(bd, d, dur, !!o.exact);
+  const windows = o.exact ? alignToShots(bd, d, dur, bpm) : sceneWindows(bd, d, dur, false);
   if (o.exact && bd.frameLog?.length && !saved) {
     // the coder gets the measured frames of its own shot verbatim
     d.scenes.forEach((s, i) => {

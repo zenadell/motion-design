@@ -52,6 +52,7 @@ export class DeepSeek implements LLM {
       } catch (e) {
         msg = (e as Error).message;
       }
+      if (status === 402) throw new LLMError('DeepSeek: the account is out of credit (402 Insufficient Balance). Top it up at https://platform.deepseek.com/top_up, then continue the run where it stopped (replicate … --resume-partial).', 402);
       const retry = attempt < 4 && (status === 0 || status === 429 || status >= 500 || /empty reply/.test(msg));
       if (!retry) throw new LLMError(`DeepSeek ${status || 'error'}: ${msg}`, status || undefined);
       this.log(`  (deepseek ${status || 'network'}: ${msg.slice(0, 80)} — retrying)`);
