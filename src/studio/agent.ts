@@ -2,7 +2,8 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import CRAFT from '../../docs/motion-craft.md?raw';
 import STUDIO_DOCS from '../../docs/studio.md?raw';
-import type { BrandKit } from '../ai/brand-kit';
+import { factCorpus, type BrandKit } from '../ai/brand-kit';
+import { lintPlan } from '../ai/lint';
 import { formatIssues, validatePlan } from '../plan/validate';
 import type { Plan } from '../plan/schema';
 import { catalogMarkdown } from '../cli/catalog';
@@ -98,6 +99,29 @@ export interface DirectOptions {
 
 export interface DirectResult { plan?: Plan; steps: number; usage: { input: number; output: number; cached: number; calls: number }; summary: string }
 
+/**
+ * The fact gate: names and numbers the film states that are not in the brand's
+ * facts or the brief (the planner's fact check, plus numbers in comp text).
+ */
+export function factIssues(plan: unknown, kit: BrandKit, brief: string): string[] {
+  const v = validatePlan(plan);
+  if (!v.ok) return v.errors.map(e => `${e.path}: ${e.message}`);
+  const corpus = factCorpus(kit, brief);
+  const out = lintPlan(v.plan, { corpus }).filter(i => i.severity === 'error' && /not in the brief or the brand facts/.test(i.message)).map(i => `${i.path}: ${i.message}`);
+  const allowed = new Set([String(v.plan.music.bpm), String(new Date().getFullYear())]);
+  const walk = (layers: { type: string; id: string; text?: string; layers?: unknown[] }[], at: string) =>
+    layers.forEach((l, i) => {
+      if (l.type === 'text' && l.text)
+        for (const m of l.text.match(/\d+(?:[.,]\d+)*/g) ?? []) {
+          const found = new RegExp(`(^|[^\\d])${m.replace(/[.,]/g, '[.,]')}($|[^\\d])`).test(corpus);
+          if (!found && !allowed.has(m)) out.push(`${at}[${i}].text: "${m}" in "${l.text}" is not in the brief or the brand facts`);
+        }
+      if (l.layers) walk(l.layers as never, `${at}[${i}].layers`);
+    });
+  (v.plan.studio?.comps ?? []).forEach((c, ci) => walk(c.layers as never, `studio.comps[${ci}].layers`));
+  return out;
+}
+
 const AGENT_TOOLS = ['studio_describe', 'studio_apply', 'studio_frame', 'studio_sheet', 'studio_rhythm', 'studio_compare', 'studio_measure'];
 
 export async function direct(o: DirectOptions): Promise<DirectResult> {
@@ -130,7 +154,7 @@ export async function direct(o: DirectOptions): Promise<DirectResult> {
   }
   messages.push({ role: 'user', content: [{ type: 'text', text: intro }, ...pics.filter(p => p.type === 'image').map(p => ({ type: 'image_url', image_url: { url: `data:${(p as { mimeType: string }).mimeType};base64,${(p as { data: string }).data}` } }))] });
   const usage = { input: 0, output: 0, cached: 0, calls: 0 };
-  let summary = '', steps = 0, nudges = 0;
+  let summary = '', steps = 0, nudges = 0, gates = 0;
   const transcript: unknown[] = [];
   for (; steps < (o.maxSteps ?? 40); steps++) {
     const { message, usage: u } = await chat(ep, messages, tools, log);
@@ -158,6 +182,12 @@ export async function direct(o: DirectOptions): Promise<DirectResult> {
         continue;
       }
       if (tc.function.name === 'finish') {
+        const facts = o.reference ? [] : factIssues(S.need(), o.kit, o.brief);
+        if (facts.length && gates++ < 2) {
+          log(`  · finish → refused: ${facts.length} fact issue(s)`);
+          messages.push({ role: 'tool', tool_call_id: tc.id, content: `✗ not finished: the fact check found things the brand's facts and the brief do not say. Fix them (use only stated facts; drop or replace the rest), then call finish again:\n${facts.slice(0, 15).join('\n')}` });
+          continue;
+        }
         summary = String(args.summary ?? '');
         messages.push({ role: 'tool', tool_call_id: tc.id, content: 'ok' });
         done = true;

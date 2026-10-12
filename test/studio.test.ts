@@ -12,6 +12,7 @@ import { encodePng } from '../src/studio/png';
 import { adapt, replaceSprite } from '../src/studio/adapt';
 import { serveMcp } from '../src/studio/mcp';
 import { offGridTimes, rhythmOf, snapComp } from '../src/studio/rhythm';
+import { factIssues } from '../src/studio/agent';
 import type { Key } from '../src/studio/schema';
 
 const plan = (comps: unknown[], sections = [{ technique: 'comp:a', beats: 4 }], assets = {}) => ({ brand: DEMO_BRAND, sections, studio: { comps, assets } });
@@ -331,5 +332,26 @@ describe('messages a model can act on', () => {
     const a = applyOps({ brand: DEMO_BRAND, sections: [{ technique: 'end-card', beats: 4 }, { technique: 'end-card', beats: 4 }] }, [{ op: 'set', path: 'sections.0.transition', value: 'flash' }]);
     expect(a.ok && (a.plan.sections as { transition?: string }[])[0].transition).toBe('flash');
     expect(applyOps({ sections: [] }, [{ op: 'set', path: 'sections.5.beats', value: 2 }]).ok).toBe(false);
+  });
+});
+
+describe('the agent fact gate', () => {
+  it('flags places, names and numbers the facts do not state', () => {
+    const kit = { brand: DEMO_BRAND, facts: { locations: ['Nigeria (HQ)', 'London'], work: [], stats: [{ value: '4.9', label: 'rating' }] }, source: '' } as never;
+    const plan = {
+      brand: DEMO_BRAND,
+      sections: [
+        { technique: 'dot-globe', beats: 8, params: { hq: { name: 'LAGOS', lat: 6.5, lon: 3.4 }, cities: [{ name: 'London', lat: 51.5, lon: -0.1 }], headline: ['Based in', 'Nigeria.'] } },
+        { technique: 'comp:c', beats: 4 },
+        { technique: 'end-card', beats: 6 },
+      ],
+      studio: { comps: [{ id: 'c', layers: [{ id: 't', type: 'text', text: 'RATED 4.9 BY 500 CLIENTS' }] }] },
+    };
+    const issues = factIssues(plan, kit, '');
+    expect(issues.some(i => /must|expected|needs/.test(i))).toBe(false); // the plan itself is valid
+    expect(issues.some(i => /LAGOS/.test(i))).toBe(true);
+    expect(issues.some(i => /"500"/.test(i))).toBe(true);
+    expect(issues.some(i => /"4\.9"/.test(i))).toBe(false);
+    expect(issues.some(i => /London/.test(i))).toBe(false);
   });
 });
