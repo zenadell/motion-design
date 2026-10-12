@@ -9,6 +9,7 @@ import { llmFor } from '../ai/models';
 import { ReplayLLM } from '../ai/replay';
 import { renderVideo } from './render';
 import { adapt } from '../studio/adapt';
+import { direct } from '../studio/agent';
 import { copyFilm } from '../studio/copy';
 import { serveMcp } from '../studio/mcp';
 import { applyOps, describe, type Op } from '../studio/ops';
@@ -25,6 +26,10 @@ export const STUDIO_HELP = `Studio (layer-and-keyframe comps; docs/studio.md):
                                                  make the copied film yours: a vision model says what each element is
                                                  (words, logo, shape…); its layers get the brand's content and keep the
                                                  measured motion (Gemini, or any provider/model through OpenRouter)
+  motion studio direct --brand brand.json --brief "..." [--seconds 20] [--model deepseek-flash] [--reference ref.mp4] [--steps 40] [-o dir]
+                                                 a model drives the studio: builds comps, looks at contact sheets of its
+                                                 own film, fixes what it sees, renders (DEEPSEEK_API_KEY or OpenRouter);
+                                                 with --reference it measures the film first and refines the copy
   motion studio mcp [plan.json]                  MCP server (stdio): any agent edits, renders and compares comps
 `;
 
@@ -92,6 +97,26 @@ export async function runStudio(pos: string[], flags: Flags): Promise<void> {
       console.log(`✓ ${join(dir, 'plan.json')} · ${u.calls} model call · ${u.input.toLocaleString()} in / ${(u.output + u.thinking).toLocaleString()} out tokens${u.usd !== undefined ? ` · ≈ $${u.usd.toFixed(4)}` : ''}`);
       if (!flags['no-render']) {
         const file = join(dir, 'adapted.mp4');
+        await renderVideo(r.plan, file, { crf: 18, workers: num(flags.workers) ?? 3, blur: num(flags.blur) ?? 4, log: s => process.stderr.write(`\r${s}   `) });
+        process.stderr.write('\n');
+        console.log(`✓ ${file}`);
+      }
+      return;
+    }
+    case 'direct': {
+      if (typeof flags.brand !== 'string') throw new Error('usage: motion studio direct --brand brand.json --brief "..." [--reference ref.mp4]');
+      const kit = loadBrandKit(JSON.parse(readFileSync(flags.brand, 'utf8')));
+      const brief = typeof flags.brief === 'string' ? (flags.brief.startsWith('@') ? readFileSync(flags.brief.slice(1), 'utf8') : flags.brief) : '';
+      const dir = out ?? 'out/studio-direct';
+      mkdirSync(dir, { recursive: true });
+      const r = await direct({
+        model: typeof flags.model === 'string' ? flags.model : 'deepseek-flash', out: dir, kit, brief, seconds: num(flags.seconds),
+        reference: typeof flags.reference === 'string' ? flags.reference : undefined, maxSteps: num(flags.steps), log: s => console.error(s),
+      });
+      console.log(`✓ ${join(dir, 'plan.json')} · ${r.steps} steps · ${r.usage.calls} model calls · ${r.usage.input.toLocaleString()} in (${r.usage.cached.toLocaleString()} cached) / ${r.usage.output.toLocaleString()} out tokens`);
+      if (r.summary) console.log(r.summary);
+      if (r.plan && !flags['no-render']) {
+        const file = join(dir, 'film.mp4');
         await renderVideo(r.plan, file, { crf: 18, workers: num(flags.workers) ?? 3, blur: num(flags.blur) ?? 4, log: s => process.stderr.write(`\r${s}   `) });
         process.stderr.write('\n');
         console.log(`✓ ${file}`);

@@ -73,7 +73,7 @@ and review the run afterwards to store new ones (lessons/lessons.json, or --less
   --brief accepts @file.txt · --replay replies.json plays back recorded model replies (tests, no key)
 `;
 
-const VALUE_FLAGS = ['at', 'crf', 'workers', 'blur', 'from', 'to', 'only', 'brand', 'brief', 'seconds', 'bpm', 'genre', 'model', 'logo', 'effort', 'qa', 'mark', 'replay', 'candidates', 'rounds', 'film-rounds', 'budget', 'target', 'code-model', 'critic-model', 'bar-video', 'bar-code', 'feedback', 'scenes', 'models', 'filter', 'parallel', 'lessons', 'remove', 'reference', 'fps', 'comp'];
+const VALUE_FLAGS = ['at', 'crf', 'workers', 'blur', 'from', 'to', 'only', 'brand', 'brief', 'seconds', 'bpm', 'genre', 'model', 'logo', 'effort', 'qa', 'mark', 'replay', 'candidates', 'rounds', 'film-rounds', 'budget', 'target', 'code-model', 'critic-model', 'bar-video', 'bar-code', 'feedback', 'scenes', 'models', 'filter', 'parallel', 'lessons', 'remove', 'reference', 'fps', 'comp', 'steps'];
 
 function parse(argv: string[]) {
   const pos: string[] = [], flags: Record<string, string | true> = {};

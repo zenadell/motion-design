@@ -17,9 +17,9 @@ import { OP_NAMES, applyOps, describe, type Op } from './ops';
 // them with a reference film, and renders the MP4.
 
 type Json = Record<string, unknown>;
-type Content = { type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string };
+export type Content = { type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string };
 
-const TOOLS = [
+export const TOOLS = [
   { name: 'studio_docs', description: 'The comp format (layers, keyframes, eases, camera, mattes, text animators) and the edit operations. Read it once before editing.', inputSchema: { type: 'object', properties: {} } },
   { name: 'studio_open', description: 'Open a plan file to work on, creating an empty one (demo brand, no sections) if it does not exist.', inputSchema: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] } },
   { name: 'studio_describe', description: 'One line per section and per layer of the open plan: types, keyed properties and their time ranges, validation errors.', inputSchema: { type: 'object', properties: { comp: { type: 'string', description: 'Only this comp' } } } },
@@ -29,6 +29,7 @@ const TOOLS = [
     inputSchema: { type: 'object', properties: { ops: { type: 'array', items: { type: 'object' } } }, required: ['ops'] },
   },
   { name: 'studio_frame', description: 'Render the open plan at time t (seconds from the start of the film) and return the frame.', inputSchema: { type: 'object', properties: { t: { type: 'number' } }, required: ['t'] } },
+  { name: 'studio_sheet', description: 'Render the open plan at several times (seconds) and return them as one contact sheet, left to right then top to bottom: the cheapest way to review the whole film.', inputSchema: { type: 'object', properties: { times: { type: 'array', items: { type: 'number' } } }, required: ['times'] } },
   {
     name: 'studio_compare',
     description: 'Compare the open plan at time t with a reference video at ref_t (default: t): SSIM (1 = identical) and a side-by-side image (reference left, plan right).',
@@ -42,7 +43,7 @@ const TOOLS = [
   { name: 'studio_render', description: 'Render the open plan to an MP4 (with its soundtrack). Returns the file path.', inputSchema: { type: 'object', properties: { out: { type: 'string' } } } },
 ];
 
-function ffmpeg(args: string[], input?: Buffer): Promise<{ out: Buffer; err: string }> {
+export function ffmpeg(args: string[], input?: Buffer): Promise<{ out: Buffer; err: string }> {
   return new Promise((resolve, reject) => {
     const p = spawn(ffmpegPath(), ['-hide_banner', ...args], { stdio: ['pipe', 'pipe', 'pipe'] });
     const out: Buffer[] = [];
@@ -58,7 +59,7 @@ function ffmpeg(args: string[], input?: Buffer): Promise<{ out: Buffer; err: str
 
 const jpeg = async (png: Buffer, width = 960) => (await ffmpeg(['-loglevel', 'error', '-i', 'pipe:0', '-vf', `scale=${width}:-2`, '-f', 'mjpeg', '-q:v', '4', 'pipe:1'], png)).out;
 
-class Session {
+export class Session {
   path?: string;
   plan: Json | null = null;
   reel: { key: string; reel: Reel } | null = null;
@@ -104,7 +105,7 @@ class Session {
   }
 }
 
-async function call(S: Session, name: string, a: Json): Promise<Content[]> {
+export async function call(S: Session, name: string, a: Json): Promise<Content[]> {
   const text = (s: string): Content[] => [{ type: 'text', text: s }];
   switch (name) {
     case 'studio_docs':
@@ -123,6 +124,19 @@ async function call(S: Session, name: string, a: Json): Promise<Content[]> {
     case 'studio_frame': {
       const png = await S.still(Number(a.t));
       return [{ type: 'image', data: (await jpeg(png)).toString('base64'), mimeType: 'image/jpeg' }];
+    }
+    case 'studio_sheet': {
+      const times = ((a.times as number[]) ?? []).slice(0, 12);
+      if (!times.length) throw new Error('times: give 1–12 times in seconds');
+      const dir = mkdtempSync(join(tmpdir(), 'studio-sheet-'));
+      try {
+        for (let i = 0; i < times.length; i++) writeFileSync(join(dir, `f${String(i).padStart(2, '0')}.png`), await S.still(Number(times[i])));
+        const cols = Math.min(3, times.length), rows = Math.ceil(times.length / cols);
+        const sheet = (await ffmpeg(['-loglevel', 'error', '-i', join(dir, 'f%02d.png'), '-vf', `scale=560:-2,tile=${cols}x${rows}:padding=6:color=white`, '-frames:v', '1', '-f', 'mjpeg', '-q:v', '5', 'pipe:1'])).out;
+        return [{ type: 'text', text: `contact sheet at t = ${times.join(', ')} s (left to right, top to bottom)` }, { type: 'image', data: sheet.toString('base64'), mimeType: 'image/jpeg' }];
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
     }
     case 'studio_compare': {
       const ref = String(a.reference), t = Number(a.t), rt = a.ref_t === undefined ? t : Number(a.ref_t);
