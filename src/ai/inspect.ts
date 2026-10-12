@@ -363,8 +363,38 @@ export async function inspectScene(o: { refFile: string; from: number; to: numbe
   }
 }
 
-/** Sharp stills of a reference segment at its stillest moments, for the coder before it writes. */
-export async function referenceStills(refFile: string, from: number, to: number, count = 3): Promise<{ t: number; jpg: Buffer }[]> {
+/**
+ * The colours of a frame as measured, for a model that would otherwise write
+ * the brand colours it remembers: the mean colour of each cell of a 3×3 grid
+ * (rows top to bottom) and the most common colours with their share.
+ */
+export function colourNote(f: RGB): string {
+  const grid: string[] = [];
+  for (let gy = 0; gy < 3; gy++) {
+    const row: string[] = [];
+    for (let gx = 0; gx < 3; gx++) {
+      const x0 = Math.floor((gx * f.w) / 3), x1 = Math.floor(((gx + 1) * f.w) / 3), y0 = Math.floor((gy * f.h) / 3), y1 = Math.floor(((gy + 1) * f.h) / 3);
+      const c = [0, 0, 0];
+      for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) for (let k = 0; k < 3; k++) c[k] += f.data[(y * f.w + x) * 3 + k];
+      row.push(hex(c.map(v => v / Math.max(1, (x1 - x0) * (y1 - y0)))));
+    }
+    grid.push(row.join(' '));
+  }
+  // 16 levels a channel; each bin reports its mean colour
+  const bins = new Map<number, number[]>();
+  for (let p = 0; p < f.w * f.h; p++) {
+    const r = f.data[p * 3], g = f.data[p * 3 + 1], b = f.data[p * 3 + 2], key = ((r >> 4) << 8) | ((g >> 4) << 4) | (b >> 4);
+    const e = bins.get(key) ?? [0, 0, 0, 0];
+    e[0] += r; e[1] += g; e[2] += b; e[3]++;
+    bins.set(key, e);
+  }
+  const common = [...bins.values()].filter(e => e[3] >= f.w * f.h * 0.02).sort((a, b) => b[3] - a[3]).slice(0, 5)
+    .map(e => `${hex([e[0] / e[3], e[1] / e[3], e[2] / e[3]])} ${Math.round((e[3] / (f.w * f.h)) * 100)}%`);
+  return `grid ${grid.join(' / ')}; most common ${common.join(', ')}`;
+}
+
+/** Sharp stills of a reference segment at its stillest moments, for the coder before it writes, with their measured colours. */
+export async function referenceStills(refFile: string, from: number, to: number, count = 3): Promise<{ t: number; jpg: Buffer; colours: string }[]> {
   const fps = 12, dur = Math.max(0.3, to - from);
   const fr = await decode(refFile, { from, dur, fps, w: 192, h: 108 });
   if (!fr.length) return [];
@@ -381,5 +411,6 @@ export async function referenceStills(refFile: string, from: number, to: number,
   return Promise.all(picked.map(async k => ({
     t: k / fps,
     jpg: await ffmpeg(['-ss', (from + k / fps).toFixed(3), '-i', refFile, '-vf', 'scale=1280:-2', '-frames:v', '1', '-f', 'mjpeg', '-q:v', '3', 'pipe:1']),
+    colours: colourNote(fr[k]),
   })));
 }

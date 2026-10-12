@@ -6,6 +6,7 @@ import { ffmpegPath } from '../cli/render';
 import { DISPLAY_NAMES, SERIF_NAMES } from '../plan/fonts';
 import { TRANSITIONS } from '../plan/schema';
 import type { BrandKit } from './brand-kit';
+import { colourNote, decode } from './inspect';
 import { invent, type InventOptions } from './invent';
 import { directionSchema, type Direction } from './invent-prompts';
 import craft from '../../docs/motion-craft.md?raw';
@@ -60,11 +61,12 @@ export async function referenceClips(file: string, windows: { from: number; to: 
  * Sharp still frames at a steady rate, with their times: a model reads small
  * words and measures layout from these far better than from a compressed clip.
  */
-export async function referenceFrames(file: string, fps: number, width = 1024): Promise<{ t: number; jpg: Buffer }[]> {
+export async function referenceFrames(file: string, fps: number, width = 1024): Promise<{ t: number; jpg: Buffer; colours: string }[]> {
   const tmp = mkdtempSync(join(tmpdir(), 'motion-refframes-'));
   try {
     await ff(['-y', '-loglevel', 'error', '-i', file, '-vf', `fps=${fps},scale='min(${width},iw)':-2`, '-q:v', '3', join(tmp, 'f%04d.jpg')]);
-    return readdirSync(tmp).filter(f => f.endsWith('.jpg')).sort().map((f, k) => ({ t: k / fps, jpg: readFileSync(join(tmp, f)) }));
+    const small = await decode(file, { fps, w: 192, h: 108 });
+    return readdirSync(tmp).filter(f => f.endsWith('.jpg')).sort().map((f, k) => ({ t: k / fps, jpg: readFileSync(join(tmp, f)), colours: small[k] ? colourNote(small[k]) : '' }));
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }
@@ -175,12 +177,12 @@ async function breakdown(critic: LLM, file: string, dur: number, outDir: string,
   // the clip for motion and sound, and sharp timed stills for words and layout
   const fps = Math.min(4, Math.max(0.5, Math.floor((72 / Math.max(1, dur)) * 2) / 2));
   const stills = await referenceFrames(file, fps);
-  const stillParts: Part[] = stills.flatMap(f => [text(`t=${f.t.toFixed(2)} s`), image(f.jpg, 'image/jpeg')]);
+  const stillParts: Part[] = stills.flatMap(f => [text(`t=${f.t.toFixed(2)} s${f.colours ? ` · measured colours: ${f.colours}` : ''}`), image(f.jpg, 'image/jpeg')]);
   const bdRes = await critic.json({
     label: 'breakdown', effort: 'high', schema: breakdownSchema(),
     system: `You are a senior motion designer breaking down a reference film so a team can rebuild it shot for shot. Watch it closely (with sound) and describe everything that makes it work: every shot with its exact start and end time, composition, what moves and how (timing, easing, overshoot, stagger), typography, colour, texture, camera, transitions, and the music. Be precise: numbers, positions, sizes relative to the frame, beat positions.
 
-You also get sharp still frames every ${(1 / fps).toFixed(2)} s, each labelled with its time. Work from them first: fill frameLog with one entry per still (read every word exactly as written, however small; measure sizes and positions against the frame; note colours), then derive the shots from the log: a new shot starts where the composition changes. Words must match the frames character for character; never guess or complete a phrase. Small elements stay small: report the size you measure, not a typical one.
+You also get sharp still frames every ${(1 / fps).toFixed(2)} s, each labelled with its time and its colours measured from the pixels (a 3×3 grid of mean colours and the most common colours): report those measured hex values, never the colours you remember for a brand. Work from them first: fill frameLog with one entry per still (read every word exactly as written, however small; measure sizes and positions against the frame; note colours), then derive the shots from the log: a new shot starts where the composition changes. Words must match the frames character for character; never guess or complete a phrase. Small elements stay small: report the size you measure, not a typical one.
 
 # Craft handbook (vocabulary)
 ${craft}`,

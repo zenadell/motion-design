@@ -445,7 +445,7 @@ export async function invent(llm: LLM, o: InventOptions) {
       }
     };
     /** Replicate mode: the reference segment this scene must match, shown to the coder. */
-    const stillsCache = new Map<number, Promise<{ t: number; jpg: Buffer }[]>>();
+    const stillsCache = new Map<number, Promise<{ t: number; jpg: Buffer; colours: string }[]>>();
     const refTarget = async (i: number): Promise<Part[]> => {
       const clip = o.reference?.clips?.[i];
       if (!clip) return [];
@@ -457,7 +457,7 @@ export async function invent(llm: LLM, o: InventOptions) {
       if (exact && src && win) {
         if (!stillsCache.has(i)) stillsCache.set(i, referenceStills(src.file, win.from, win.to).catch(() => []));
         const stills = await stillsCache.get(i)!;
-        if (stills.length) parts.push(text('SHARP STILLS OF THE TARGET (match every small detail: gaps between elements, corner radii, glow size and softness, shadows, text size, weight and spacing):'), ...stills.flatMap(s => [text(`t=${s.t.toFixed(2)} s from the scene start`), image(s.jpg, 'image/jpeg')]));
+        if (stills.length) parts.push(text('SHARP STILLS OF THE TARGET (match every small detail: gaps between elements, corner radii, glow size and softness, shadows, text size, weight and spacing). Each comes with its colours measured from the pixels: use those hex values, not colours you remember for the brand:'), ...stills.flatMap(s => [text(`t=${s.t.toFixed(2)} s from the scene start · measured colours: ${s.colours}`), image(s.jpg, 'image/jpeg')]));
       }
       return parts;
     };
