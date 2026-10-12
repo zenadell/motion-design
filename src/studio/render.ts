@@ -181,13 +181,42 @@ const BLEND_OPS: Record<string, GlobalCompositeOperation> = {
 };
 const blendOp = (b?: string): GlobalCompositeOperation => BLEND_OPS[b ?? 'normal'] ?? 'source-over';
 
+/**
+ * A fast blur: shrink the sharp drawing and enlarge it again with smoothing. A canvas
+ * blur filter costs a full-frame pass per draw in software rendering (what headless
+ * rendering uses), 5–10× the whole frame; this costs two copies. σ ≈ half the shrink factor.
+ */
+function softBlit(g: G, src: HTMLCanvasElement, blur: number, alpha: number, blend?: string): void {
+  const k = Math.max(1, Math.min(48, blur * 2));
+  const sw = Math.max(2, Math.round(W / k)), sh = Math.max(2, Math.round(H / k));
+  const S = layerOf('studio-soft', sw, sh);
+  S.g.imageSmoothingEnabled = true;
+  S.g.imageSmoothingQuality = 'high';
+  S.g.drawImage(src, 0, 0, sw, sh);
+  g.save();
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.globalAlpha = alpha;
+  g.globalCompositeOperation = blendOp(blend);
+  g.imageSmoothingEnabled = true;
+  g.imageSmoothingQuality = 'high';
+  g.drawImage(S.canvas, 0, 0, W, H);
+  g.restore();
+}
+
 function drawLayer(g: G, L: Layer, e: Env, m: Mat, alpha: number, comp: Comp, isolated: boolean): void {
+  const blur = num(L.blur, e, 0);
+  if (blur > 0.75) {
+    const A = layerOf(`studio-blur${e.depth}`);
+    e.depth++;
+    drawLayer(A.g, { ...L, blur: undefined } as Layer, e, m, 1, comp, true);
+    e.depth--;
+    softBlit(g, A.canvas, blur, alpha * g.globalAlpha, isolated ? undefined : L.blend);
+    return;
+  }
   g.save();
   setMat(g, m);
   g.globalAlpha = alpha;
   if (!isolated) g.globalCompositeOperation = blendOp(L.blend);
-  const blur = num(L.blur, e, 0);
-  if (blur > 0.05) g.filter = `blur(${blur.toFixed(2)}px)`;
   if (L.glow) {
     g.shadowColor = cssColor(col(L.glow.color, e, 'primary'));
     g.shadowBlur = num(L.glow.radius, e, 24);
@@ -377,6 +406,21 @@ function fxOf(c: Ctx) {
 
 // ── text ──────────────────────────────────────────────────────────────────────
 
+let unitCtx: G | null = null;
+/** One small scratch canvas for blurred text units, resized (and so cleared) per use. */
+function unitCanvas(w: number, h: number): G {
+  if (!unitCtx) unitCtx = document.createElement('canvas').getContext('2d')!;
+  const cv = unitCtx.canvas;
+  if (cv.width !== w || cv.height !== h) {
+    cv.width = w;
+    cv.height = h;
+  } else {
+    unitCtx.setTransform(1, 0, 0, 1, 0, 0);
+    unitCtx.clearRect(0, 0, w, h);
+  }
+  return unitCtx;
+}
+
 function setFont(g: G, size: number, weight: number, name: string | undefined, italic: boolean): void {
   if (!name || FONT_ROLES.has(name)) roleFont(g, size, weight, (name ?? 'display') as FontRole, italic);
   else g.font = `${italic ? 'italic ' : ''}${weight} ${size.toFixed(1)}px "${name}", system-ui, sans-serif`;
@@ -431,18 +475,35 @@ function drawText(g: G, L: TextLayer, e: Env): void {
     for (const u of lineUnits) units.push({ ...u, x: u.x + x0 });
   });
   const y0 = -((lines.length - 1) * lh) / 2;
-  const draw = (u: Unit) => {
+  const draw = (u: Unit, c: G = g) => {
     if (/^\s+$/.test(u.text)) return;
     if (stroke) {
-      g.strokeStyle = stroke.color;
-      g.lineWidth = stroke.width;
-      g.lineJoin = 'round';
-      g.strokeText(u.text, 0, 0);
+      c.strokeStyle = stroke.color;
+      c.lineWidth = stroke.width;
+      c.lineJoin = 'round';
+      c.strokeText(u.text, 0, 0);
     }
     if (!stroke || L.color !== undefined) {
-      g.fillStyle = fill;
-      g.fillText(u.text, 0, 0);
+      c.fillStyle = fill;
+      c.fillText(u.text, 0, 0);
     }
+  };
+  // a blurred unit: drawn small into its own little canvas, then enlarged with smoothing (see softBlit)
+  const drawBlurred = (u: Unit, blur: number) => {
+    const T = g.getTransform(), sc = Math.max(1e-3, Math.hypot(T.a, T.b));
+    const pad = blur * 2.5 + size * 0.15, x0 = -pad, y0 = -size * 0.75 - pad, bw = u.w + 2 * pad, bh = size * 1.5 + 2 * pad;
+    const k = Math.max(1, blur * sc * 2);
+    const cw = Math.max(2, Math.ceil((bw * sc) / k)), ch = Math.max(2, Math.ceil((bh * sc) / k));
+    const c = unitCanvas(cw, ch);
+    c.setTransform(sc / k, 0, 0, sc / k, (-x0 * sc) / k, (-y0 * sc) / k);
+    c.font = g.font;
+    (c as G & { letterSpacing: string }).letterSpacing = (g as G & { letterSpacing: string }).letterSpacing;
+    c.textBaseline = 'middle';
+    c.textAlign = 'left';
+    draw(u, c);
+    g.imageSmoothingEnabled = true;
+    g.imageSmoothingQuality = 'high';
+    g.drawImage(c.canvas, 0, 0, cw, ch, x0, y0, bw, bh);
   };
   if (!A) {
     for (const u of units) {
@@ -460,7 +521,7 @@ function drawText(g: G, L: TextLayer, e: Env): void {
   const from: Required<UnitState> = { ...IDENTITY, ...(A.from ?? { opacity: 0, y: size * 0.6 }) };
   const to: Required<UnitState> = { ...IDENTITY, ...(A.exit?.to ?? { opacity: 0, y: -size * 0.6 }) };
   const dur = A.duration ?? 0.5, stag = A.stagger ?? 0.04, start = A.start ?? 0;
-  const baseAlpha = g.globalAlpha, baseFilter = g.filter;
+  const baseAlpha = g.globalAlpha;
   visibleUnits.forEach((u, i) => {
     const ti = e.t - (start + ordIn[i] * stag);
     let p = dur > 0 ? applyEase(A.ease ?? 'outExpo', Math.max(0, Math.min(1, ti / dur)), Math.max(0, ti) * e.sec) : ti >= 0 ? 1 : 0;
@@ -483,9 +544,9 @@ function drawText(g: G, L: TextLayer, e: Env): void {
     if (s.rotation) g.rotate((s.rotation * Math.PI) / 180);
     if (s.scale !== 1) g.scale(s.scale, s.scale);
     g.globalAlpha = baseAlpha * s.opacity;
-    if (s.blur > 0.05) g.filter = `${baseFilter === 'none' ? '' : baseFilter + ' '}blur(${s.blur.toFixed(2)}px)`;
     g.translate(-u.w / 2, 0);
-    draw(u);
+    if (s.blur > 0.75) drawBlurred(u, s.blur);
+    else draw(u);
     g.restore();
   });
 }

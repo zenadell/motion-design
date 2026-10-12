@@ -40,7 +40,10 @@ export function buildHtml(plan: Plan): string {
   const needs3d = /S\.three\b|\b(logo3d|type3d|shapes3d)\b/.test(code);
   const three = needs3d ? `<script>${readFileSync(process.env.MOTION_THREE_PATH || join(ROOT, 'dist', 'three.js'), 'utf8').replace(/<\/script/gi, '<\\/script')}</script>\n` : '';
   const c = plan.brand.colors;
-  const data = JSON.stringify(plan).replace(/</g, '\\u003c');
+  // only the studio images that some layer still uses (an edited copy can carry hundreds of dropped sprites)
+  const used = new Set(JSON.stringify(plan.studio?.comps ?? []).match(/"asset:[^"]+"/g)?.map(m => m.slice(7, -1)) ?? []);
+  const lean = plan.studio ? { ...plan, studio: { ...plan.studio, assets: Object.fromEntries(Object.entries(plan.studio.assets).filter(([id]) => used.has(id))) } } : plan;
+  const data = JSON.stringify(lean).replace(/</g, '\\u003c');
   return `<!doctype html>
 <html lang="en">
 <head>
