@@ -1,4 +1,6 @@
+import { spawn } from 'node:child_process';
 import { decode, type RGB } from '../ai/inspect';
+import { ffmpegPath } from '../cli/render';
 import { fitKeys, fitScalar } from './fit';
 import { encodePng } from './png';
 import type { CompInput, Key } from './schema';
@@ -444,7 +446,8 @@ export function analyse(frames: RGB[], fps: number): Analysis {
     if (!s.flat) {
       let a = s.k0;
       for (let k = s.k0 + 1; k <= s.k1 + 1; k++)
-        if (k > s.k1 || bgDiff(bgs[k], bgs[a]) > 16) {
+        // a new plate for a real change, at least half a second after the last, at most 8 per shot
+        if (k > s.k1 || (bgDiff(bgs[k], bgs[a]) > 28 && k - a >= fps / 2 && s.plates.length < 7)) {
           s.plates.push({ k0: a, k1: k - 1, bg: bgs[Math.floor((a + k - 1) / 2)] });
           a = k;
         }
@@ -610,7 +613,26 @@ function helpfulRuns(ok: boolean[]): [number, number][] {
 }
 
 /** Cut an element out of a full-resolution frame, keying away the background model. */
-function sprite(full: RGB, bg: Bg, owner: (X: number, Y: number) => boolean, box: number[], sc: number): { png: Buffer; cx: number; cy: number; w: number; h: number } {
+/** Box-filter an RGBA image down by an integer factor. */
+function shrink(rgba: Uint8Array, w: number, h: number, f: number): { rgba: Uint8Array; w: number; h: number } {
+  const ow = Math.max(1, Math.floor(w / f)), oh = Math.max(1, Math.floor(h / f)), out = new Uint8Array(ow * oh * 4);
+  for (let y = 0; y < oh; y++)
+    for (let x = 0; x < ow; x++) {
+      // premultiplied average so transparent pixels do not darken the edges
+      let r = 0, g = 0, b = 0, a = 0;
+      for (let dy = 0; dy < f; dy++)
+        for (let dx = 0; dx < f; dx++) {
+          const i = ((y * f + dy) * w + x * f + dx) * 4, al = rgba[i + 3];
+          r += rgba[i] * al; g += rgba[i + 1] * al; b += rgba[i + 2] * al; a += al;
+        }
+      const o = (y * ow + x) * 4;
+      if (a) { out[o] = r / a; out[o + 1] = g / a; out[o + 2] = b / a; }
+      out[o + 3] = a / (f * f);
+    }
+  return { rgba: out, w: ow, h: oh };
+}
+
+function sprite(full: RGB, bg: Bg, owner: (X: number, Y: number) => boolean, box: number[], sc: number, soft = false, lowRes = false): { png: Buffer; cx: number; cy: number; w: number; h: number; shrunk: boolean } {
   const pad = 6;
   const X0 = Math.max(0, Math.floor(box[0] * sc) - pad), Y0 = Math.max(0, Math.floor(box[1] * sc) - pad);
   const X1 = Math.min(FW, Math.ceil(box[2] * sc) + pad), Y1 = Math.min(FH, Math.ceil(box[3] * sc) + pad);
@@ -640,7 +662,10 @@ function sprite(full: RGB, bg: Bg, owner: (X: number, Y: number) => boolean, box
       }
       rgba[j * 4 + 3] = Math.round(a * 255);
     }
-  return { png: encodePng(rgba, w, h), cx: X0 + w / 2, cy: Y0 + h / 2, w, h };
+  // soft things (glows, haze, light sweeps) need little resolution; big crisp ones some less
+  const f = soft ? 4 : lowRes || w * h > 500_000 ? 2 : 1;
+  const img = f > 1 ? shrink(rgba, w, h, f) : { rgba, w, h };
+  return { png: encodePng(img.rgba, img.w, img.h), cx: X0 + w / 2, cy: Y0 + h / 2, w, h, shrunk: f > 1 };
 }
 
 function bgPlate(bg: Bg): Buffer {
@@ -661,7 +686,7 @@ const dataUrl = (png: Buffer) => `data:image/png;base64,${png.toString('base64')
  * Build a comp from an analysis. `fullFrame(k)` returns frame k at 1920×1080
  * (the sprites are cut from it). Times are seconds from the window start.
  */
-export async function buildComp(A: Analysis, frames: RGB[], fullFrame: (k: number) => Promise<RGB>, o: { id?: string; maxTracks?: number } = {}): Promise<Measured> {
+export async function buildComp(A: Analysis, frames: RGB[], fullFrame: (k: number) => Promise<RGB>, o: { id?: string; maxTracks?: number; sourceWidth?: number } = {}): Promise<Measured> {
   const sc = FW / A.w, t = (k: number) => +(k / A.fps).toFixed(4);
   const built = describeTracks(A, frames, o.maxTracks ?? 150);
   const assets: Record<string, string> = {};
@@ -716,7 +741,7 @@ export async function buildComp(A: Analysis, frames: RGB[], fullFrame: (k: numbe
         }
       return false;
     };
-    const sp = sprite(full, A.bgs[k], owner, hb, sc);
+    const sp = sprite(full, A.bgs[k], owner, hb, sc, !b.hero.crisp, (o.sourceWidth ?? FW) < 1600);
     assets[b.id] = dataUrl(sp.png);
     // the sprite is centred on its crop; the measured centre is the weighted centroid
     const offX = b.hero.cx * sc - sp.cx, offY = b.hero.cy * sc - sp.cy;
@@ -730,6 +755,7 @@ export async function buildComp(A: Analysis, frames: RGB[], fullFrame: (k: numbe
         name: `${b.mode} · ${hex(b.hero.color)} · ${Math.round((hb[2] - hb[0]) * sc)}×${Math.round((hb[3] - hb[1]) * sc)}`,
         type: 'image',
         src: `asset:${b.id}`,
+        ...(sp.shrunk ? { size: [sp.w, sp.h] } : {}),
         in: t(rows[0].k),
         out: t(rows[rows.length - 1].k + 1),
       };
@@ -778,6 +804,16 @@ export async function buildComp(A: Analysis, frames: RGB[], fullFrame: (k: numbe
   return { comp, assets, tracks: summaries, shots, duration, report };
 }
 
+function probeWidth(file: string): Promise<number | undefined> {
+  return new Promise(resolve => {
+    const p = spawn(ffmpegPath(), ['-hide_banner', '-i', file], { stdio: ['ignore', 'ignore', 'pipe'] });
+    let err = '';
+    p.stderr.on('data', d => (err += d));
+    p.on('close', () => resolve(Number(err.match(/Video:.*?(\d{2,5})x\d{2,5}/)?.[1]) || undefined));
+    p.on('error', () => resolve(undefined));
+  });
+}
+
 /** Measure a reference video file (16:9) into a comp. */
 export async function measureVideo(file: string, o: MeasureOptions = {}): Promise<Measured> {
   const fps = o.fps ?? 30, w = o.width ?? 512, h = Math.round((w * 9) / 16 / 2) * 2;
@@ -785,6 +821,8 @@ export async function measureVideo(file: string, o: MeasureOptions = {}): Promis
   const frames = await decode(file, { from, dur: o.to !== undefined ? o.to - from : undefined, fps, w, h });
   if (frames.length < 2) throw new Error(`could not read frames from ${file}`);
   const A = analyse(frames, fps);
+  // a low-resolution source (a phone video of a screen) gets sprites at about its own resolution
+  const sourceWidth = await probeWidth(file);
   // input seeking keeps frames at or after the time: aim a hair early to land on frame k
-  return buildComp(A, frames, async k => (await decode(file, { from: Math.max(0, from + k / fps - 0.002), w: FW, h: FH }))[0], o);
+  return buildComp(A, frames, async k => (await decode(file, { from: Math.max(0, from + k / fps - 0.002), w: FW, h: FH }))[0], { ...o, sourceWidth });
 }

@@ -264,7 +264,10 @@ export function describe(plan: unknown, compId?: string): string {
     for (const l of c.layers) lines.push(...layerLine(l, 1));
   }
   const assets = Object.keys(p.studio?.assets ?? {});
-  if (assets.length) lines.push('', `assets: ${assets.join(', ')}`);
+  if (assets.length) {
+    const plates = assets.filter(a => a.startsWith('plate')).length;
+    lines.push('', `assets: ${assets.length} images${plates ? ` (${plates} background plates)` : ''}${assets.length <= 24 ? `: ${assets.join(', ')}` : ''}`);
+  }
   if (!v.ok) lines.push('', 'errors:', ...v.errors.slice(0, 20).map(e => `  ${e.path}: ${e.message}`));
   return lines.join('\n');
 }
