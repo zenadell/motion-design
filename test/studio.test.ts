@@ -323,3 +323,13 @@ describe('rhythm', () => {
     expect(r.text).toMatch(/off: 1\.833 s in comp:a/);
   });
 });
+
+describe('messages a model can act on', () => {
+  it('names the valid transitions and sets fields inside lists', () => {
+    const r = validatePlan({ brand: DEMO_BRAND, sections: [{ technique: 'end-card', beats: 4, transition: { technique: 'flash' } }, { technique: 'end-card', beats: 4 }] });
+    expect(!r.ok && r.errors[0].message).toMatch(/one of cut, blade/);
+    const a = applyOps({ brand: DEMO_BRAND, sections: [{ technique: 'end-card', beats: 4 }, { technique: 'end-card', beats: 4 }] }, [{ op: 'set', path: 'sections.0.transition', value: 'flash' }]);
+    expect(a.ok && (a.plan.sections as { transition?: string }[])[0].transition).toBe('flash');
+    expect(applyOps({ sections: [] }, [{ op: 'set', path: 'sections.5.beats', value: 2 }]).ok).toBe(false);
+  });
+});

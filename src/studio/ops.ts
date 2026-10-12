@@ -70,16 +70,24 @@ function merge(target: Json, patch: Json): void {
   }
 }
 
-/** Get the object holding a dotted path's last key, creating objects on the way. */
+/** Get the object holding a dotted path's last key, creating objects on the way. Numbers index into lists ("sections.3.transition"). */
 function holder(root: Json, path: string): [Json, string] {
   const parts = path.split('.');
-  let o = root;
+  let o: unknown = root;
   for (const p of parts.slice(0, -1)) {
-    if (o[p] === undefined) o[p] = {};
-    if (typeof o[p] !== 'object' || o[p] === null || Array.isArray(o[p])) throw new Error(`"${path}": "${p}" is not an object`);
-    o = o[p] as Json;
+    if (Array.isArray(o)) {
+      const i = Number(p);
+      if (!Number.isInteger(i) || i < 0 || i >= o.length) throw new Error(`"${path}": no item ${p} (the list has ${o.length})`);
+      o = o[i];
+      continue;
+    }
+    const j = o as Json;
+    if (j[p] === undefined) j[p] = {};
+    if (typeof j[p] !== 'object' || j[p] === null) throw new Error(`"${path}": "${p}" is not an object or a list`);
+    o = j[p];
   }
-  return [o, parts[parts.length - 1]];
+  if (Array.isArray(o) || typeof o !== 'object' || o === null) throw new Error(`"${path}": can only set a field of an object`);
+  return [o as Json, parts[parts.length - 1]];
 }
 
 function setKey(o: Json, k: string, t: number, v: unknown, ease?: Ease): void {

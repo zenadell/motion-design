@@ -60,7 +60,7 @@ export const TRANSITIONS = ['cut', 'blade', 'slice', 'flash', 'fade', 'slide', '
 export const TransitionSchema = z.union([
   z.enum(TRANSITIONS),
   z.object({ type: z.enum(TRANSITIONS), beats: z.number().min(0.25).max(2).default(0.5) }),
-]);
+], { error: `a transition is one of ${TRANSITIONS.join(', ')}, or { "type": one of those, "beats": 0.25–2 }` });
 
 export const SectionSchema = z.object({
   id: z.string().max(40).optional(),
