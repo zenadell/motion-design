@@ -63,11 +63,12 @@ async function chat(ep: Endpoint, messages: Msg[], tools: unknown[], log: (s: st
 const SYSTEM = (reference: boolean) => `You are a world-class motion designer at the controls of a motion design studio. You never write a plan by hand: you operate the studio through tools, look at what you made, and fix it.
 
 How you work:
-1. Decide the film: one strong idea, an energy curve (hook → build → peak → breath → logo), the beats of every shot. Say it in a few lines first.
+1. Decide the film: one strong idea, an energy curve (hook → build → peak → breath → logo), the beats of every shot. Say it in a few lines first. Use the brand's facts: each kind of fact has a set piece that shows it best: locations → dot-globe (hq = the home country, cities = the places served), work (projects, clients) → montage, stats → stat-odometer, services → particle-morph or word-cuts, the website → exploded-ui. Use the real names and numbers from the facts.
 2. Build it with studio_apply (comps, layers, keyframes, eases, camera, sounds, and the plan's sections). Prefer several short comps (2–4 s each, units "beats") joined by transitions, plus library techniques where they are the best tool.
 3. Look: studio_sheet at the key moments of every shot (entrances mid-way, settled holds, exits). Judge it like a creative director: composition, hierarchy, legibility, contrast, empty or dead frames, things off screen or overlapping, timing.
 4. Fix what you saw with studio_apply, and look again. Repeat until it is genuinely excellent.
-5. Call finish with a short summary.
+5. Rhythm: the picture must be on the music. Put every time in a comp on the 16th-note grid (multiples of 0.25 beats): keyframes, animator start, exit start, sounds, hits, in/out. Entrances start on a beat or an 8th, impacts land on beats, and every impact has a sound and a hit. Then run the snap op on every comp and studio_rhythm, and fix anything it reports as off. Aim for 100 %.
+6. Call finish with a short summary.
 
 Rules: only use facts from the brand and brief. Text stays inside the 90-px safe area and is never cut off. Use brand colour roles (bg, text, primary, accent…) and font roles. Every frame is a poster. Batch many operations per studio_apply call.${reference ? `
 
@@ -87,13 +88,17 @@ export interface DirectOptions {
   brief: string;
   seconds?: number;
   reference?: string;
+  /** An existing plan to improve instead of starting empty. */
+  plan?: unknown;
   maxSteps?: number;
+  /** Quantise every comp to the 16th-note grid before finishing (default true). */
+  snap?: boolean;
   log?: (s: string) => void;
 }
 
 export interface DirectResult { plan?: Plan; steps: number; usage: { input: number; output: number; cached: number; calls: number }; summary: string }
 
-const AGENT_TOOLS = ['studio_describe', 'studio_apply', 'studio_frame', 'studio_sheet', 'studio_compare', 'studio_measure'];
+const AGENT_TOOLS = ['studio_describe', 'studio_apply', 'studio_frame', 'studio_sheet', 'studio_rhythm', 'studio_compare', 'studio_measure'];
 
 export async function direct(o: DirectOptions): Promise<DirectResult> {
   const log = o.log ?? (() => undefined);
@@ -101,7 +106,9 @@ export async function direct(o: DirectOptions): Promise<DirectResult> {
   const S = new Session();
   const file = join(o.out, 'plan.json');
   S.open(file);
-  const first = applyOps(S.need(), [{ op: 'set', path: 'brand', value: o.kit.brand }, { op: 'set', path: 'meta', value: { title: 'Studio film', fps: 30, hud: false, captions: false, grain: 0.05 } }]);
+  const first = o.plan
+    ? applyOps(o.plan, [{ op: 'set', path: 'brand', value: o.kit.brand }])
+    : applyOps(S.need(), [{ op: 'set', path: 'brand', value: o.kit.brand }, { op: 'set', path: 'meta', value: { title: 'Studio film', fps: 30, hud: false, captions: false, grain: 0.05 } }]);
   if (!first.ok) throw new Error(first.error);
   S.plan = first.plan;
   S.save();
@@ -110,7 +117,7 @@ export async function direct(o: DirectOptions): Promise<DirectResult> {
     { type: 'function', function: { name: 'finish', description: 'The film is done and excellent. Give a short summary.', parameters: { type: 'object', properties: { summary: { type: 'string' } }, required: ['summary'] } } },
   ];
   const messages: Msg[] = [{ role: 'system', content: SYSTEM(!!o.reference) }];
-  let intro = `BRAND\n${JSON.stringify(o.kit.brand)}\nFACTS\n${JSON.stringify(o.kit.facts)}\n\nBRIEF\n${o.brief}\n\nLength: about ${o.seconds ?? 20} s at ${120} BPM (1 beat = 0.5 s). The plan is open and empty; build it.`;
+  let intro = `BRAND\n${JSON.stringify(o.kit.brand)}\nFACTS\n${JSON.stringify(o.kit.facts)}\n\nBRIEF\n${o.brief}\n\nLength: about ${o.seconds ?? 20} s at ${120} BPM (1 beat = 0.5 s). ${o.plan ? `A first version of this film is open. Review it like a demanding creative director (studio_describe, studio_sheet over the whole film, studio_rhythm with scope "all"), then make it excellent: fix every weak frame, every off-beat moment, and anything the brand's facts deserve that the film is missing.\n\n${describe(S.need())}` : 'The plan is open and empty; build it.'}`;
   const pics: Content[] = [];
   if (o.reference) {
     const m = await call(S, 'studio_measure', { reference: o.reference, comp: 'copy' });
@@ -175,6 +182,16 @@ export async function direct(o: DirectOptions): Promise<DirectResult> {
     }
     writeFileSync(join(o.out, 'agent-log.json'), JSON.stringify({ model: ep.label, usage, transcript }, null, 1));
     if (done) break;
+  }
+  if (o.snap !== false) {
+    // the safety net: every comp on the 16th-note grid, whatever the model left
+    const comps = ((S.need().studio as { comps?: { id: string }[] } | undefined)?.comps ?? []).map(c => c.id);
+    const r = applyOps(S.need(), comps.map(id => ({ op: 'snap' as const, comp: id })));
+    if (r.ok) {
+      S.plan = r.plan;
+      S.save();
+      log(`  · snap → ${r.done.join(' | ')}`);
+    }
   }
   await S.close();
   const v = validatePlan(S.need());

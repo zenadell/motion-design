@@ -26,7 +26,7 @@ export const STUDIO_HELP = `Studio (layer-and-keyframe comps; docs/studio.md):
                                                  make the copied film yours: a vision model says what each element is
                                                  (words, logo, shape…); its layers get the brand's content and keep the
                                                  measured motion (Gemini, or any provider/model through OpenRouter)
-  motion studio direct --brand brand.json --brief "..." [--seconds 20] [--model deepseek-flash] [--reference ref.mp4] [--steps 40] [-o dir]
+  motion studio direct --brand brand.json --brief "..." [--seconds 20] [--model deepseek-flash] [--reference ref.mp4] [--plan first.json] [--steps 40] [-o dir]
                                                  a model drives the studio: builds comps, looks at contact sheets of its
                                                  own film, fixes what it sees, renders (DEEPSEEK_API_KEY or OpenRouter);
                                                  with --reference it measures the film first and refines the copy
@@ -112,6 +112,7 @@ export async function runStudio(pos: string[], flags: Flags): Promise<void> {
       const r = await direct({
         model: typeof flags.model === 'string' ? flags.model : 'deepseek-flash', out: dir, kit, brief, seconds: num(flags.seconds),
         reference: typeof flags.reference === 'string' ? flags.reference : undefined, maxSteps: num(flags.steps), log: s => console.error(s),
+        plan: typeof flags.plan === 'string' ? JSON.parse(readFileSync(flags.plan, 'utf8')) : undefined, snap: !flags['no-snap'],
       });
       console.log(`✓ ${join(dir, 'plan.json')} · ${r.steps} steps · ${r.usage.calls} model calls · ${r.usage.input.toLocaleString()} in (${r.usage.cached.toLocaleString()} cached) / ${r.usage.output.toLocaleString()} out tokens`);
       if (r.summary) console.log(r.summary);

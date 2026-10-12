@@ -9,6 +9,7 @@ import { ffmpegPath, renderVideo } from '../cli/render';
 import { DEMO_BRAND } from '../plan/demo';
 import { formatIssues, validatePlan } from '../plan/validate';
 import { measureVideo } from './measure';
+import { offGridTimes, rhythmOf } from './rhythm';
 import { OP_NAMES, applyOps, describe, type Op } from './ops';
 
 // The studio as an MCP server (JSON-RPC 2.0 over stdio, newline-delimited).
@@ -30,6 +31,7 @@ export const TOOLS = [
   },
   { name: 'studio_frame', description: 'Render the open plan at time t (seconds from the start of the film) and return the frame.', inputSchema: { type: 'object', properties: { t: { type: 'number' } }, required: ['t'] } },
   { name: 'studio_sheet', description: 'Render the open plan at several times (seconds) and return them as one contact sheet, left to right then top to bottom: the cheapest way to review the whole film.', inputSchema: { type: 'object', properties: { times: { type: 'array', items: { type: 'number' } } }, required: ['times'] } },
+  { name: 'studio_rhythm', description: 'Measure whether the picture is on the music: every visual hit (cut, landing, flash) against the beat grid, with how many ms off each one is, plus comp times that are off the 16th-note grid. scope "comps" (default, fast) plays only the comp sections; "all" plays the whole film. Fix what is off (or snap the comp) and measure again.', inputSchema: { type: 'object', properties: { scope: { type: 'string', enum: ['comps', 'all'] } } } },
   {
     name: 'studio_compare',
     description: 'Compare the open plan at time t with a reference video at ref_t (default: t): SSIM (1 = identical) and a side-by-side image (reference left, plan right).',
@@ -137,6 +139,34 @@ export async function call(S: Session, name: string, a: Json): Promise<Content[]
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }
+    }
+    case 'studio_rhythm': {
+      const reel = await S.reelFor();
+      const plan = validatePlan(S.need());
+      const bpm = plan.ok ? plan.plan.music.bpm : 120;
+      // every frame of the chosen sections (one frame before each, for the change into it), across a few pages
+      const f = reel.fps, n = Math.round(reel.duration * f);
+      const wanted = a.scope === 'all' ? reel.sections : reel.sections.filter(sec => /^(comp|scene):/.test(sec.technique));
+      const ranges = (wanted.length ? wanted : reel.sections).map(sec => [Math.max(0, Math.round(sec.start * f) - 1), Math.min(n, Math.round(sec.end * f))] as [number, number]);
+      const jobs: [number, number][] = [];
+      for (const [x, y] of ranges) for (let c = x; c < y; c += 60) jobs.push([c, Math.min(y, c + 60)]);
+      const pages = [reel.page, ...(await Promise.all(Array.from({ length: Math.min(3, jobs.length - 1) }, () => reel.open())))];
+      const results: { t: number; coverage: number; motion: number }[][] = [];
+      let next = 0;
+      await Promise.all(pages.map(async pg => {
+        for (let j; (j = next++) < jobs.length; ) {
+          const [x, y] = jobs[j];
+          results[j] = await pg.evaluate(([xx, yy, ff]) => window.__reel!.metrics!(xx / ff, yy / ff, 1 / ff), [x, y, f] as const);
+        }
+      }));
+      await Promise.all(pages.slice(1).map(pg => pg.context().close()));
+      // each job's first frame has no frame before it in that job: drop it (the job before covers it)
+      const byFrame = new Map<number, { t: number; coverage: number; motion: number }>();
+      jobs.forEach(([x], j) => results[j].forEach((r, i) => { if (i > 0) byFrame.set(x + i, r); }));
+      const series = [...byFrame.entries()].sort((p, q) => p[0] - q[0]).map(([, r]) => r);
+      const r = rhythmOf(series, bpm, reel.fps, reel.sections.map(s => ({ start: s.start, end: s.end, technique: s.technique })));
+      const statics = ((plan.ok ? plan.plan.studio?.comps : []) ?? []).flatMap(c => offGridTimes(c as unknown as Json, 60 / bpm).map(x => `  comp ${c.id}: ${x}`));
+      return text([r.text, statics.length ? `comp times off the 16th grid (${statics.length}; the snap op fixes them all):\n${statics.slice(0, 20).join('\n')}` : 'comp times: all on the 16th grid'].join('\n'));
     }
     case 'studio_compare': {
       const ref = String(a.reference), t = Number(a.t), rt = a.ref_t === undefined ? t : Number(a.ref_t);

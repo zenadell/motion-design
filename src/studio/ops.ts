@@ -1,5 +1,6 @@
 import { validatePlan, type Issue } from '../plan/validate';
 import { isKeys, keyTimes } from './anim';
+import { snapComp } from './rhythm';
 import type { Ease, Layer } from './schema';
 
 // The studio's editing API. An agent (through MCP, or a model's JSON reply)
@@ -20,9 +21,10 @@ export type Op =
   | { op: 'remove_keyframe'; comp: string; layer?: string; prop: string; t: number }
   | { op: 'add_asset'; id: string; data: string }
   | { op: 'set_sections'; sections: Json[] }
-  | { op: 'set'; path: string; value: unknown };
+  | { op: 'set'; path: string; value: unknown }
+  | { op: 'snap'; comp: string; grid?: number };
 
-export const OP_NAMES = ['add_comp', 'remove_comp', 'set_comp', 'add_layer', 'update_layer', 'remove_layer', 'move_layer', 'keyframe', 'remove_keyframe', 'add_asset', 'set_sections', 'set'] as const;
+export const OP_NAMES = ['add_comp', 'remove_comp', 'set_comp', 'add_layer', 'update_layer', 'remove_layer', 'move_layer', 'keyframe', 'remove_keyframe', 'add_asset', 'set_sections', 'set', 'snap'] as const;
 
 export type ApplyResult =
   | { ok: true; plan: Json; done: string[]; issues: Issue[]; warnings: Issue[] }
@@ -174,6 +176,11 @@ function applyOne(plan: Json, op: Op): string {
       if (op.value === null) delete o[k];
       else o[k] = op.value;
       return `set ${op.path}`;
+    }
+    case 'snap': {
+      const bpm = Number(((plan.music as Json | undefined)?.bpm as number | undefined) ?? 120);
+      const n = snapComp(compOf(plan, op.comp), op.grid ?? 0.25, 60 / bpm);
+      return `snapped ${n} time${n === 1 ? '' : 's'} in comp "${op.comp}" to the ${op.grid ?? 0.25}-beat grid`;
     }
     default:
       throw new Error(`unknown op "${(op as { op: string }).op}"; ops: ${OP_NAMES.join(', ')}`);

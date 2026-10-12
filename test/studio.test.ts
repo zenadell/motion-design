@@ -11,6 +11,7 @@ import { applyOps, describe as describeComp, type Op } from '../src/studio/ops';
 import { encodePng } from '../src/studio/png';
 import { adapt, replaceSprite } from '../src/studio/adapt';
 import { serveMcp } from '../src/studio/mcp';
+import { offGridTimes, rhythmOf, snapComp } from '../src/studio/rhythm';
 import type { Key } from '../src/studio/schema';
 
 const plan = (comps: unknown[], sections = [{ technique: 'comp:a', beats: 4 }], assets = {}) => ({ brand: DEMO_BRAND, sections, studio: { comps, assets } });
@@ -289,5 +290,36 @@ describe('the studio over MCP', () => {
     expect(text(5)).toMatch(/no layer "nope"[\s\S]*nothing changed/);
     expect(by(6).error!.code).toBe(-32601);
     expect(JSON.parse(readFileSync(file, 'utf8')).studio.comps[0].layers[0].id).toBe('title');
+  });
+});
+
+describe('rhythm', () => {
+  it('snaps comp timing to the grid without collapsing keys', () => {
+    const comp = {
+      id: 'a', units: 'beats',
+      sounds: [{ t: 1.2, sound: 'pop' }],
+      layers: [{ id: 't', type: 'text', text: 'HI', in: 0.1, animate: { start: 0.35 }, opacity: [{ t: 0.1, v: 0 }, { t: 0.2, v: 1 }, { t: 1.6, v: 1 }] }],
+    };
+    expect(offGridTimes(comp, 0.5)).toHaveLength(6);
+    expect(snapComp(comp, 0.25, 0.5)).toBe(6);
+    expect(comp.sounds[0].t).toBe(1.25);
+    expect(comp.layers[0].animate.start).toBe(0.25);
+    expect(comp.layers[0].opacity.map(k => k.t)).toEqual([0, 0.25, 1.5]);
+    expect(offGridTimes(comp, 0.5)).toEqual([]);
+  });
+  it('snaps seconds-based comps on the beat grid in seconds', () => {
+    const comp = { id: 'a', units: 'seconds', layers: [{ id: 'r', type: 'rect', size: [1, 1], opacity: [{ t: 0.2, v: 0 }, { t: 0.4, v: 1 }] }] };
+    snapComp(comp, 0.25, 0.5); // a 16th = 0.125 s at 120 BPM
+    expect(comp.layers[0].opacity.map(k => k.t)).toEqual([0.25, 0.375]);
+  });
+  it('finds visual hits and measures them against the beat grid', () => {
+    const fps = 30, motion = Array.from({ length: 90 }, (_, k) => ({ t: k / fps, motion: 0.002 }));
+    motion[15].motion = 0.3; // 0.5 s: on beat 1
+    motion[38].motion = 0.2; // 1.267 s: 17 ms after the 8th at 1.25 → on the grid
+    motion[55].motion = 0.25; // 1.833 s: 42 ms before the 16th at 1.875 → off
+    const r = rhythmOf(motion, 120, fps, [{ start: 0, end: 3, technique: 'comp:a' }]);
+    expect(r.onsets.map(o => o.grid)).toEqual(['beat', '8th', 'off']);
+    expect(r.score).toBeCloseTo(2 / 3);
+    expect(r.text).toMatch(/off: 1\.833 s in comp:a/);
   });
 });
