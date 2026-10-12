@@ -4,6 +4,7 @@ import { extractBrand } from '../ai/brand';
 import { loadBrandKit } from '../ai/brand-kit';
 import { Gemini, DEFAULT_MODEL, apiKey } from '../ai/gemini';
 import { isOpenRouterId, llmFor } from '../ai/models';
+import { deepSeekKey, isDeepSeekId } from '../ai/deepseek';
 import { openRouterKey } from '../ai/openrouter';
 import { bakeoff } from './bakeoff';
 import { summarizeUsage, type LLM, type Usage } from '../ai/llm';
@@ -32,7 +33,9 @@ const svgOf = (d: string, box: number[]) => `<svg xmlns="http://www.w3.org/2000/
 
 /** A model by id: "provider/model" ids go through OpenRouter, bare ids to Gemini. */
 function modelById(id: string | undefined): LLM {
-  if (isOpenRouterId(id)) {
+  if (isDeepSeekId(id)) {
+    if (!deepSeekKey()) throw new Error('set DEEPSEEK_API_KEY first (https://platform.deepseek.com/api_keys)');
+  } else if (isOpenRouterId(id)) {
     if (!openRouterKey()) throw new Error('set OPENROUTER_API_KEY first (https://openrouter.ai/keys)');
   } else if (!apiKey()) throw new Error('set GEMINI_API_KEY first (https://aistudio.google.com/apikey)');
   return llmFor(id, log);
